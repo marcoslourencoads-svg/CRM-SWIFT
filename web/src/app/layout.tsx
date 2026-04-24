@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CRM JP",
+  title: "CRM Agência Swift",
   description: "CRM SaaS para gestão de pipeline comercial",
 };
 
