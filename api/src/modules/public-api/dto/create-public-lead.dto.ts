@@ -8,7 +8,7 @@ export class CreatePublicLeadDto {
   @Transform(emptyToUndefined)
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @Transform(emptyToUndefined)
   @IsEmail()
@@ -27,7 +27,7 @@ export class CreatePublicLeadDto {
 
   @IsString()
   @IsNotEmpty()
-  pipelineId: string;
+  pipelineId!: string;
 
   @Transform(emptyToUndefined)
   @IsString()
