@@ -60,4 +60,8 @@ export class CreatePublicLeadDto {
   @IsString()
   @IsOptional()
   fbclid?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }

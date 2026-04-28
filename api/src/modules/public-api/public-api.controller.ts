@@ -143,7 +143,18 @@ export class PublicApiController {
         });
       }
 
-      return { lead, tracking };
+      let note = null;
+      if (dto.notes && dto.notes.trim().length > 0) {
+        note = await tx.note.create({
+          data: {
+            leadId: lead.id,
+            userId: (req as any).user.sub,
+            content: dto.notes.trim(),
+          },
+        });
+      }
+
+      return { lead, tracking, note };
     });
 
     return result;
