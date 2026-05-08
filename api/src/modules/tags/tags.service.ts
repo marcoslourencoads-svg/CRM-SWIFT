@@ -7,6 +7,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
+
 @Injectable()
 export class TagsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -15,6 +24,30 @@ export class TagsService {
     return this.prisma.tag.findMany({
       where: { organizationId: orgId },
       orderBy: { name: 'asc' },
+    });
+  }
+
+  async upsertByName(orgId: string, name: string, color?: string) {
+    const trimmed = name.trim();
+    if (!trimmed) throw new ConflictException('Tag name cannot be empty');
+
+    const existing = await this.prisma.tag.findFirst({
+      where: {
+        organizationId: orgId,
+        name: { equals: trimmed, mode: 'insensitive' },
+      },
+    });
+    if (existing) return existing;
+
+    const palette = ['#6B7280', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444', '#14B8A6'];
+    const fallback = palette[Math.abs(hashString(trimmed)) % palette.length];
+
+    return this.prisma.tag.create({
+      data: {
+        organizationId: orgId,
+        name: trimmed,
+        color: color ?? fallback,
+      },
     });
   }
 

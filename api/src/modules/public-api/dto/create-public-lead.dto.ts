@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEmail } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEmail, IsArray, IsObject } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 const emptyToUndefined = ({ value }: { value: unknown }) =>
@@ -83,4 +83,13 @@ export class CreatePublicLeadDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  tagNames?: string[];
+
+  @IsObject()
+  @IsOptional()
+  customFields?: Record<string, string | number | boolean | string[] | null>;
 }

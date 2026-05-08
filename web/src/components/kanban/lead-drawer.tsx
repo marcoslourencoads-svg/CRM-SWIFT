@@ -7,9 +7,12 @@ import {
   ArrowRightLeft,
   CalendarIcon,
   CirclePlus,
+  MessageSquare,
   Pencil,
   Plus,
+  Save,
   Tag,
+  Trash2,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -37,6 +40,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +51,54 @@ interface TagInfo {
   id: string;
   name: string;
   color: string;
+}
+
+type CustomFieldType =
+  | 'TEXT'
+  | 'TEXTAREA'
+  | 'NUMBER'
+  | 'CURRENCY'
+  | 'DATE'
+  | 'DATETIME'
+  | 'SELECT'
+  | 'MULTI_SELECT'
+  | 'CHECKBOX'
+  | 'URL'
+  | 'PHONE'
+  | 'EMAIL'
+  | 'RATING'
+  | 'PERCENTAGE';
+
+interface CustomFieldDefinition {
+  id: string;
+  pipelineId: string;
+  name: string;
+  slug: string;
+  type: CustomFieldType;
+  options: string[] | null;
+  defaultValue: string | null;
+  isRequired: boolean;
+  position: number;
+}
+
+interface CustomFieldValueEntry {
+  id: string;
+  fieldDefinitionId: string;
+  textValue: string | null;
+  numberValue: number | null;
+  dateValue: string | null;
+  booleanValue: boolean | null;
+  jsonValue: unknown;
+  fieldDefinition: CustomFieldDefinition;
+}
+
+interface NoteEntry {
+  id: string;
+  content: string;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+  user: { id: string; name: string; avatarUrl?: string | null };
 }
 
 interface LeadDetail {
@@ -64,6 +116,8 @@ interface LeadDetail {
   contact: { id: string; name: string; email: string; phone: string; jobTitle: string } | null;
   company: { id: string; name: string; domain: string } | null;
   tags?: { tag: TagInfo }[];
+  notes?: NoteEntry[];
+  customFieldValues?: CustomFieldValueEntry[];
 }
 
 interface Activity {
@@ -127,6 +181,26 @@ function activityIcon(type: string) {
   }
 }
 
+function getCustomFieldDisplayValue(value: CustomFieldValueEntry | undefined): string | number | boolean | string[] | null {
+  if (!value) return null;
+  switch (value.fieldDefinition.type) {
+    case 'NUMBER':
+    case 'CURRENCY':
+    case 'RATING':
+    case 'PERCENTAGE':
+      return value.numberValue;
+    case 'CHECKBOX':
+      return value.booleanValue;
+    case 'DATE':
+    case 'DATETIME':
+      return value.dateValue;
+    case 'MULTI_SELECT':
+      return Array.isArray(value.jsonValue) ? (value.jsonValue as string[]) : null;
+    default:
+      return value.textValue;
+  }
+}
+
 function centsToDisplay(cents: number): string {
   return (cents / 100).toFixed(2).replace('.', ',');
 }
@@ -155,6 +229,15 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
   // Tags
   const [allTags, setAllTags] = useState<TagInfo[]>([]);
   const [showTagSelect, setShowTagSelect] = useState(false);
+
+  // Notes
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteDraft, setEditingNoteDraft] = useState('');
+
+  // Custom field definitions for the lead's pipeline
+  const [fieldDefinitions, setFieldDefinitions] = useState<CustomFieldDefinition[]>([]);
 
   // Local field state for controlled inputs
   const [estimatedValueDisplay, setEstimatedValueDisplay] = useState('');
@@ -204,6 +287,17 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
     }
   }, []);
 
+  const fetchFieldDefinitions = useCallback(async (pipelineId: string) => {
+    try {
+      const { data } = await api.get(
+        `/pipelines/${pipelineId}/custom-fields`,
+      );
+      setFieldDefinitions(data.data ?? []);
+    } catch {
+      // custom fields are optional — silently fail
+    }
+  }, []);
+
   useEffect(() => {
     if (leadId) {
       fetchLead(leadId);
@@ -212,8 +306,15 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
     } else {
       setLead(null);
       setActivities([]);
+      setFieldDefinitions([]);
     }
   }, [leadId, fetchLead, fetchActivities, fetchTags]);
+
+  useEffect(() => {
+    if (lead?.pipeline?.id) {
+      fetchFieldDefinitions(lead.pipeline.id);
+    }
+  }, [lead?.pipeline?.id, fetchFieldDefinitions]);
 
   // ------ Patch helper ------
 
@@ -259,6 +360,74 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
         await fetchLead(lead.id);
       } catch (err) {
         console.error('Failed to remove tag', err);
+      }
+    },
+    [lead, fetchLead],
+  );
+
+  // ------ Note handlers ------
+
+  const submitNote = useCallback(async () => {
+    if (!lead) return;
+    const content = noteDraft.trim();
+    if (!content) return;
+    setSavingNote(true);
+    try {
+      await api.post(`/leads/${lead.id}/notes`, { content });
+      setNoteDraft('');
+      await fetchLead(lead.id);
+    } catch (err) {
+      console.error('Failed to add note', err);
+    } finally {
+      setSavingNote(false);
+    }
+  }, [lead, noteDraft, fetchLead]);
+
+  const startEditingNote = (note: NoteEntry) => {
+    setEditingNoteId(note.id);
+    setEditingNoteDraft(note.content);
+  };
+
+  const saveEditingNote = useCallback(async () => {
+    if (!lead || !editingNoteId) return;
+    const content = editingNoteDraft.trim();
+    if (!content) return;
+    try {
+      await api.patch(`/notes/${editingNoteId}`, { content });
+      setEditingNoteId(null);
+      setEditingNoteDraft('');
+      await fetchLead(lead.id);
+    } catch (err) {
+      console.error('Failed to update note', err);
+    }
+  }, [lead, editingNoteId, editingNoteDraft, fetchLead]);
+
+  const deleteNote = useCallback(
+    async (noteId: string) => {
+      if (!lead) return;
+      if (!window.confirm('Tem certeza que quer apagar esta nota?')) return;
+      try {
+        await api.delete(`/notes/${noteId}`);
+        await fetchLead(lead.id);
+      } catch (err) {
+        console.error('Failed to delete note', err);
+      }
+    },
+    [lead, fetchLead],
+  );
+
+  // ------ Custom field handlers ------
+
+  const setCustomFieldValue = useCallback(
+    async (fieldDefinitionId: string, value: unknown) => {
+      if (!lead) return;
+      try {
+        await api.put(`/leads/${lead.id}/custom-fields`, {
+          values: [{ fieldDefinitionId, value }],
+        });
+        await fetchLead(lead.id);
+      } catch (err) {
+        console.error('Failed to set custom field value', err);
       }
     },
     [lead, fetchLead],
@@ -562,6 +731,149 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                   </div>
                 </div>
 
+                {/* Custom Fields */}
+                {fieldDefinitions.length > 0 && (
+                  <div className="mt-6">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Campos adicionais
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {fieldDefinitions.map((def) => {
+                        const valueEntry = lead.customFieldValues?.find(
+                          (v) => v.fieldDefinitionId === def.id,
+                        );
+                        const current = getCustomFieldDisplayValue(valueEntry);
+
+                        return (
+                          <div
+                            key={def.id}
+                            className={
+                              def.type === 'TEXTAREA' || def.type === 'MULTI_SELECT'
+                                ? 'col-span-2 flex flex-col gap-1.5'
+                                : 'flex flex-col gap-1.5'
+                            }
+                          >
+                            <Label className="text-xs text-muted-foreground">
+                              {def.name}
+                              {def.isRequired && <span className="ml-0.5 text-red-500">*</span>}
+                            </Label>
+
+                            {def.type === 'SELECT' && (
+                              <Select
+                                value={(current as string) ?? ''}
+                                onValueChange={(val) =>
+                                  setCustomFieldValue(def.id, val || null)
+                                }
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Selecione" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(def.options ?? []).map((opt) => (
+                                    <SelectItem key={opt} value={opt}>
+                                      {opt}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+
+                            {def.type === 'CHECKBOX' && (
+                              <div className="flex h-9 items-center">
+                                <Switch
+                                  checked={Boolean(current)}
+                                  onCheckedChange={(checked) =>
+                                    setCustomFieldValue(def.id, checked)
+                                  }
+                                />
+                              </div>
+                            )}
+
+                            {(def.type === 'NUMBER' ||
+                              def.type === 'CURRENCY' ||
+                              def.type === 'RATING' ||
+                              def.type === 'PERCENTAGE') && (
+                              <Input
+                                type="number"
+                                defaultValue={current != null ? String(current) : ''}
+                                onBlur={(e) => {
+                                  const v = e.target.value;
+                                  const num = v === '' ? null : Number(v);
+                                  if (num !== current) setCustomFieldValue(def.id, num);
+                                }}
+                                placeholder="0"
+                              />
+                            )}
+
+                            {(def.type === 'DATE' || def.type === 'DATETIME') && (
+                              <Input
+                                type={def.type === 'DATETIME' ? 'datetime-local' : 'date'}
+                                defaultValue={
+                                  current
+                                    ? format(
+                                        new Date(current as string),
+                                        def.type === 'DATETIME' ? "yyyy-MM-dd'T'HH:mm" : 'yyyy-MM-dd',
+                                      )
+                                    : ''
+                                }
+                                onBlur={(e) => setCustomFieldValue(def.id, e.target.value || null)}
+                              />
+                            )}
+
+                            {def.type === 'TEXTAREA' && (
+                              <textarea
+                                defaultValue={(current as string) ?? ''}
+                                onBlur={(e) => setCustomFieldValue(def.id, e.target.value || null)}
+                                placeholder="..."
+                                className="min-h-[72px] rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              />
+                            )}
+
+                            {(def.type === 'TEXT' ||
+                              def.type === 'URL' ||
+                              def.type === 'PHONE' ||
+                              def.type === 'EMAIL') && (
+                              <Input
+                                defaultValue={(current as string) ?? ''}
+                                onBlur={(e) => setCustomFieldValue(def.id, e.target.value || null)}
+                                placeholder="..."
+                              />
+                            )}
+
+                            {def.type === 'MULTI_SELECT' && (
+                              <div className="flex flex-wrap gap-1">
+                                {(def.options ?? []).map((opt) => {
+                                  const arr = Array.isArray(current) ? (current as string[]) : [];
+                                  const active = arr.includes(opt);
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={opt}
+                                      onClick={() => {
+                                        const next = active
+                                          ? arr.filter((x) => x !== opt)
+                                          : [...arr, opt];
+                                        setCustomFieldValue(def.id, next);
+                                      }}
+                                      className={`rounded-full border px-2 py-0.5 text-xs ${
+                                        active
+                                          ? 'border-primary bg-primary/10 text-primary'
+                                          : 'border-border text-muted-foreground hover:bg-muted'
+                                      }`}
+                                    >
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Summary */}
                 <div className="mt-6 rounded-lg border bg-muted/40 p-3 text-sm">
                   <p className="font-medium">Resumo</p>
@@ -582,17 +894,120 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
 
               {/* -- Timeline Tab -- */}
               <TabsContent value="timeline" className="pt-4">
+                {/* Add note box */}
+                <div className="mb-4 rounded-lg border bg-muted/30 p-3">
+                  <textarea
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        submitNote();
+                      }
+                    }}
+                    placeholder="Adicionar nota... (Ctrl+Enter pra salvar)"
+                    className="min-h-[72px] w-full resize-none border-0 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
+                  />
+                  <div className="mt-2 flex items-center justify-end">
+                    <Button
+                      size="sm"
+                      onClick={submitNote}
+                      disabled={savingNote || !noteDraft.trim()}
+                    >
+                      <MessageSquare className="size-3 mr-1" />
+                      {savingNote ? 'Salvando...' : 'Salvar nota'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Notes list */}
+                {(lead.notes?.length ?? 0) > 0 && (
+                  <div className="mb-4 space-y-2">
+                    {lead.notes!.map((note) => (
+                      <div
+                        key={note.id}
+                        className="rounded-lg border border-amber-200 bg-amber-50/60 p-3"
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <MessageSquare className="size-3 text-amber-600" />
+                            <span className="font-medium">{note.user.name}</span>
+                            <span className="text-muted-foreground">
+                              {formatDistanceToNow(new Date(note.createdAt), {
+                                addSuffix: true,
+                                locale: ptBR,
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => startEditingNote(note)}
+                              className="size-6"
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => deleteNote(note.id)}
+                              className="size-6"
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {editingNoteId === note.id ? (
+                          <div>
+                            <textarea
+                              value={editingNoteDraft}
+                              onChange={(e) => setEditingNoteDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                  e.preventDefault();
+                                  saveEditingNote();
+                                }
+                                if (e.key === 'Escape') setEditingNoteId(null);
+                              }}
+                              className="min-h-[72px] w-full resize-none rounded border bg-background p-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                              autoFocus
+                            />
+                            <div className="mt-2 flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingNoteId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button size="sm" onClick={saveEditingNote}>
+                                <Save className="size-3 mr-1" />
+                                Salvar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap text-sm">{note.content}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Activities list */}
                 {activitiesLoading ? (
                   <div className="flex flex-col gap-3">
                     {Array.from({ length: 4 }).map((_, i) => (
                       <Skeleton key={i} className="h-10 w-full" />
                     ))}
                   </div>
-                ) : activities.length === 0 ? (
+                ) : activities.length === 0 && (lead.notes?.length ?? 0) === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     Nenhuma atividade registrada.
                   </p>
-                ) : (
+                ) : activities.length > 0 ? (
                   <ol className="relative border-l border-border ml-3">
                     {activities.map((activity) => (
                       <li key={activity.id} className="mb-6 ml-6">
@@ -612,7 +1027,7 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                       </li>
                     ))}
                   </ol>
-                )}
+                ) : null}
               </TabsContent>
             </Tabs>
           </>

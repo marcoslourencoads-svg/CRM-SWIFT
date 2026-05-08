@@ -171,6 +171,14 @@ export class LeadsService {
         contact: true,
         company: true,
         tags: { include: { tag: true } },
+        notes: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+        },
+        customFieldValues: {
+          include: { fieldDefinition: true },
+        },
       },
     });
     if (!lead) throw new NotFoundException('Lead not found');

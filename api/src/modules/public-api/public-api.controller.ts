@@ -14,6 +14,8 @@ import { LeadTrackingService } from '../lead-tracking/lead-tracking.service';
 import { CreatePublicLeadDto } from './dto/create-public-lead.dto';
 import { ApiKeyGuard, USE_API_KEY } from '../../common/guards/api-key.guard';
 import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
+import { TagsService } from '../tags/tags.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 
 // Custom decorator to mark routes as API-key authenticated (bypasses JWT)
 export const UseApiKey = () => SetMetadata(USE_API_KEY, true);
@@ -26,6 +28,8 @@ export class PublicApiController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly trackingService: LeadTrackingService,
+    private readonly tagsService: TagsService,
+    private readonly customFieldsService: CustomFieldsService,
   ) {}
 
   @Post('leads')
@@ -157,6 +161,47 @@ export class PublicApiController {
       return { lead, tracking, note };
     });
 
-    return result;
+    const tagsAttached: string[] = [];
+    if (dto.tagNames?.length) {
+      const unique = Array.from(
+        new Set(dto.tagNames.map((n) => n.trim()).filter((n) => n.length > 0)),
+      );
+      for (const name of unique) {
+        try {
+          const tag = await this.tagsService.upsertByName(orgId, name);
+          await this.tagsService.addTagToLead(orgId, result.lead.id, tag.id);
+          tagsAttached.push(tag.name);
+        } catch (err) {
+          // Don't fail the whole request if a tag couldn't be created.
+          console.warn(`[public-api] failed to attach tag "${name}":`, err);
+        }
+      }
+    }
+
+    let customFieldsApplied = 0;
+    if (dto.customFields && Object.keys(dto.customFields).length > 0) {
+      const definitions = await this.prisma.customFieldDefinition.findMany({
+        where: { pipelineId: dto.pipelineId },
+      });
+      const bySlug = new Map(definitions.map((d) => [d.slug, d]));
+      const items = Object.entries(dto.customFields)
+        .map(([key, value]) => {
+          const def = bySlug.get(key);
+          if (!def) return null;
+          return { fieldDefinitionId: def.id, value };
+        })
+        .filter((x): x is { fieldDefinitionId: string; value: any } => x !== null);
+
+      if (items.length > 0) {
+        try {
+          await this.customFieldsService.setValues(result.lead.id, items);
+          customFieldsApplied = items.length;
+        } catch (err) {
+          console.warn('[public-api] failed to set custom fields:', err);
+        }
+      }
+    }
+
+    return { ...result, tagsAttached, customFieldsApplied };
   }
 }

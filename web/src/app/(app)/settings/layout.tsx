@@ -7,6 +7,7 @@ import {
   Kanban,
   Tags,
   Globe,
+  Sliders,
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils';
 const settingsNav = [
   { href: '/settings/organization', label: 'Organização', icon: Building2 },
   { href: '/settings/pipelines', label: 'Pipelines', icon: Kanban },
+  { href: '/settings/custom-fields', label: 'Campos Adicionais', icon: Sliders },
   { href: '/settings/tags', label: 'Tags', icon: Tags },
   { href: '/settings/lead-sources', label: 'Fontes de Origem', icon: Globe },
   { href: '/settings/team', label: 'Time', icon: Users },
