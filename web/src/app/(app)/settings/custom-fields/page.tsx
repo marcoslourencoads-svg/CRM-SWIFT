@@ -60,6 +60,7 @@ interface FieldDefinition {
   position: number;
 }
 
+
 export default function CustomFieldsPage() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>('');
@@ -74,6 +75,7 @@ export default function CustomFieldsPage() {
   const [options, setOptions] = useState<string[]>([]);
   const [optionDraft, setOptionDraft] = useState('');
   const [isRequired, setIsRequired] = useState(false);
+  const [isVisibleOnCard, setIsVisibleOnCard] = useState(false);
 
   const fetchPipelines = useCallback(async () => {
     try {
@@ -116,6 +118,7 @@ export default function CustomFieldsPage() {
     setOptions([]);
     setOptionDraft('');
     setIsRequired(false);
+    setIsVisibleOnCard(false);
     setDialogOpen(true);
   };
 
@@ -126,6 +129,7 @@ export default function CustomFieldsPage() {
     setOptions(field.options ?? []);
     setOptionDraft('');
     setIsRequired(field.isRequired);
+    setIsVisibleOnCard(field.isVisibleOnCard);
     setDialogOpen(true);
   };
 
@@ -154,6 +158,7 @@ export default function CustomFieldsPage() {
       name: name.trim(),
       type,
       isRequired,
+      isVisibleOnCard,
     };
     if (type === 'SELECT' || type === 'MULTI_SELECT') {
       payload.options = options;
@@ -357,17 +362,31 @@ export default function CustomFieldsPage() {
               </div>
             )}
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="required"
-                checked={isRequired}
-                onChange={(e) => setIsRequired(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
-              />
-              <Label htmlFor="required" className="cursor-pointer">
-                Obrigatório
-              </Label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="required"
+                  checked={isRequired}
+                  onChange={(e) => setIsRequired(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <Label htmlFor="required" className="cursor-pointer">
+                  Obrigatório
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="visible-card"
+                  checked={isVisibleOnCard}
+                  onChange={(e) => setIsVisibleOnCard(e.target.checked)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <Label htmlFor="visible-card" className="cursor-pointer">
+                  Mostrar no card do kanban
+                </Label>
+              </div>
             </div>
           </div>
           <DialogFooter>

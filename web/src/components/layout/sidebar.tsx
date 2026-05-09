@@ -10,13 +10,13 @@ import {
   LogOut,
   Kanban,
   ChevronDown,
-  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { NotificationsPopover } from '@/components/notifications/notifications-popover';
 import api from '@/lib/api';
 
 interface Pipeline {
@@ -53,9 +53,7 @@ export function Sidebar() {
     <aside className="flex h-screen w-60 flex-col border-r bg-card">
       <div className="flex h-14 items-center justify-between px-4">
         <span className="font-semibold text-lg">CRM</span>
-        <Button variant="ghost" size="icon" className="h-8 w-8" title="Notificacoes">
-          <Bell className="h-4 w-4" />
-        </Button>
+        <NotificationsPopover />
       </div>
       <Separator />
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">

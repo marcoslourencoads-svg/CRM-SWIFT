@@ -184,6 +184,14 @@ export class LeadsService {
         contact: { select: { id: true, name: true, email: true, phone: true } },
         company: { select: { id: true, name: true } },
         tags: { include: { tag: true } },
+        customFieldValues: {
+          where: { fieldDefinition: { isVisibleOnCard: true } },
+          include: { fieldDefinition: true },
+        },
+        tasks: {
+          where: { completedAt: null },
+          select: { id: true, dueDate: true },
+        },
       },
       orderBy: [{ statusId: 'asc' }, { position: 'asc' }],
       take,

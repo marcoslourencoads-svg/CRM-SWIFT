@@ -23,9 +23,21 @@ interface DroppableColumnProps {
   onAddLead: (statusId: string) => void;
   onLeadClick?: (leadId: string) => void;
   onLeadChanged?: () => void;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (leadId: string) => void;
 }
 
-export function DroppableColumn({ status, leads, onAddLead, onLeadClick, onLeadChanged }: DroppableColumnProps) {
+export function DroppableColumn({
+  status,
+  leads,
+  onAddLead,
+  onLeadClick,
+  onLeadChanged,
+  selectionMode,
+  selectedIds,
+  onToggleSelected,
+}: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
 
   const totalValue = leads.reduce((sum, l) => sum + (l.estimatedValue || 0), 0);
@@ -78,6 +90,9 @@ export function DroppableColumn({ status, leads, onAddLead, onLeadClick, onLeadC
               lead={lead}
               onLeadClick={onLeadClick}
               onLeadChanged={onLeadChanged}
+              selectionMode={selectionMode}
+              selected={selectedIds?.has(lead.id)}
+              onToggleSelected={onToggleSelected}
             />
           ))}
         </SortableContext>

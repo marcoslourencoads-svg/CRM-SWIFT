@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Bell } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +12,25 @@ import { LeadActionsMenu } from './lead-actions/lead-actions-menu';
 import { MarkLostDialog } from './lead-actions/mark-lost-dialog';
 import { MarkWonDialog } from './lead-actions/mark-won-dialog';
 import { DeleteLeadDialog } from './lead-actions/delete-lead-dialog';
+
+function customFieldDisplay(v: NonNullable<Lead['customFieldValues']>[number]) {
+  switch (v.fieldDefinition.type) {
+    case 'NUMBER':
+    case 'CURRENCY':
+    case 'PERCENTAGE':
+    case 'RATING':
+      return v.numberValue != null ? String(v.numberValue) : null;
+    case 'CHECKBOX':
+      return v.booleanValue ? 'Sim' : 'Não';
+    case 'DATE':
+    case 'DATETIME':
+      return v.dateValue ? new Date(v.dateValue).toLocaleDateString('pt-BR') : null;
+    case 'MULTI_SELECT':
+      return Array.isArray(v.jsonValue) ? (v.jsonValue as string[]).join(', ') : null;
+    default:
+      return v.textValue;
+  }
+}
 
 export interface Lead {
   id: string;
@@ -24,6 +44,21 @@ export interface Lead {
   contact?: { name: string; email: string } | null;
   company?: { name: string } | null;
   tags?: { tag: { id: string; name: string; color: string } }[];
+  customFieldValues?: {
+    id: string;
+    textValue: string | null;
+    numberValue: number | null;
+    dateValue: string | null;
+    booleanValue: boolean | null;
+    jsonValue: unknown;
+    fieldDefinition: {
+      id: string;
+      name: string;
+      type: string;
+      isVisibleOnCard: boolean;
+    };
+  }[];
+  tasks?: { id: string; dueDate: string | null }[];
 }
 
 interface LeadCardProps {
@@ -31,6 +66,9 @@ interface LeadCardProps {
   overlay?: boolean;
   onLeadClick?: (leadId: string) => void;
   onLeadChanged?: () => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelected?: (leadId: string) => void;
 }
 
 function getInitials(name: string): string {
@@ -42,7 +80,15 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export function LeadCard({ lead, overlay, onLeadClick, onLeadChanged }: LeadCardProps) {
+export function LeadCard({
+  lead,
+  overlay,
+  onLeadClick,
+  onLeadChanged,
+  selectionMode,
+  selected,
+  onToggleSelected,
+}: LeadCardProps) {
   const [showLost, setShowLost] = useState(false);
   const [showWon, setShowWon] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -54,7 +100,7 @@ export function LeadCard({ lead, overlay, onLeadClick, onLeadChanged }: LeadCard
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: lead.id });
+  } = useSortable({ id: lead.id, disabled: selectionMode });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -66,15 +112,34 @@ export function LeadCard({ lead, overlay, onLeadClick, onLeadChanged }: LeadCard
       <div
         ref={setNodeRef}
         style={style}
-        {...attributes}
-        {...listeners}
-        onClick={() => onLeadClick?.(lead.id)}
+        {...(selectionMode ? {} : attributes)}
+        {...(selectionMode ? {} : listeners)}
+        onClick={() => {
+          if (selectionMode) {
+            onToggleSelected?.(lead.id);
+          } else {
+            onLeadClick?.(lead.id);
+          }
+        }}
         className={cn(
-          'group cursor-grab rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md relative',
+          'group rounded-lg border bg-card p-3 shadow-sm transition-shadow hover:shadow-md relative',
+          selectionMode ? 'cursor-pointer' : 'cursor-grab',
           isDragging && 'opacity-50',
           overlay && 'shadow-lg rotate-2',
+          selected && 'ring-2 ring-primary ring-offset-1',
         )}
       >
+        {selectionMode && (
+          <div className="absolute top-2 right-2">
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onToggleSelected?.(lead.id)}
+              onClick={(e) => e.stopPropagation()}
+              className="h-4 w-4 rounded border-border"
+            />
+          </div>
+        )}
         <div className="flex items-start justify-between gap-1">
           <p className="text-sm font-medium leading-tight flex-1">{lead.title}</p>
 
@@ -120,14 +185,53 @@ export function LeadCard({ lead, overlay, onLeadClick, onLeadChanged }: LeadCard
           </div>
         )}
 
+        {lead.customFieldValues && lead.customFieldValues.length > 0 && (
+          <div className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+            {lead.customFieldValues.slice(0, 3).map((v) => {
+              const display = customFieldDisplay(v);
+              if (!display) return null;
+              return (
+                <p key={v.id} className="truncate">
+                  <span className="font-medium">{v.fieldDefinition.name}:</span>{' '}
+                  {display}
+                </p>
+              );
+            })}
+          </div>
+        )}
+
         <div className="mt-2 flex items-center justify-between">
-          {lead.estimatedValue ? (
-            <span className="text-xs font-semibold text-emerald-600">
-              {formatCurrency(lead.estimatedValue)}
-            </span>
-          ) : (
-            <span />
-          )}
+          <div className="flex items-center gap-2">
+            {lead.estimatedValue ? (
+              <span className="text-xs font-semibold text-emerald-600">
+                {formatCurrency(lead.estimatedValue)}
+              </span>
+            ) : null}
+
+            {lead.tasks && lead.tasks.length > 0 && (() => {
+              const overdue = lead.tasks.some(
+                (t) => t.dueDate && new Date(t.dueDate) < new Date(),
+              );
+              return (
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0 text-[10px] font-semibold',
+                    overdue
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-amber-100 text-amber-700',
+                  )}
+                  title={
+                    overdue
+                      ? `${lead.tasks.length} tarefa(s) — alguma atrasada`
+                      : `${lead.tasks.length} tarefa(s) pendente(s)`
+                  }
+                >
+                  <Bell className="size-3" />
+                  {lead.tasks.length}
+                </span>
+              );
+            })()}
+          </div>
 
           {lead.assignee && (
             <Avatar className="h-6 w-6">

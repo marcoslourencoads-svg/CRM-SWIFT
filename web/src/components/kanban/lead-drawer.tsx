@@ -105,6 +105,18 @@ interface NoteEntry {
   user: { id: string; name: string; avatarUrl?: string | null };
 }
 
+interface TaskEntry {
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: string | null;
+  completedAt: string | null;
+  priority: string;
+  createdAt: string;
+  assignee: { id: string; name: string; avatarUrl?: string | null } | null;
+  creator: { id: string; name: string };
+}
+
 interface LeadDetail {
   id: string;
   title: string;
@@ -248,6 +260,12 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
   const [showWonDialog, setShowWonDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  // Tasks
+  const [tasks, setTasks] = useState<TaskEntry[]>([]);
+  const [taskDraftTitle, setTaskDraftTitle] = useState('');
+  const [taskDraftDueDate, setTaskDraftDueDate] = useState('');
+  const [savingTask, setSavingTask] = useState(false);
+
   // Local field state for controlled inputs
   const [estimatedValueDisplay, setEstimatedValueDisplay] = useState('');
   const [probabilityDisplay, setProbabilityDisplay] = useState('');
@@ -307,17 +325,28 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
     }
   }, []);
 
+  const fetchTasks = useCallback(async (id: string) => {
+    try {
+      const { data } = await api.get(`/leads/${id}/tasks`);
+      setTasks(data.data ?? []);
+    } catch {
+      // tasks are optional
+    }
+  }, []);
+
   useEffect(() => {
     if (leadId) {
       fetchLead(leadId);
       fetchActivities(leadId);
       fetchTags();
+      fetchTasks(leadId);
     } else {
       setLead(null);
       setActivities([]);
       setFieldDefinitions([]);
+      setTasks([]);
     }
-  }, [leadId, fetchLead, fetchActivities, fetchTags]);
+  }, [leadId, fetchLead, fetchActivities, fetchTags, fetchTasks]);
 
   useEffect(() => {
     if (lead?.pipeline?.id) {
@@ -423,6 +452,40 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
       }
     },
     [lead, fetchLead],
+  );
+
+  // ------ Task handlers ------
+
+  const submitTask = useCallback(async () => {
+    if (!lead) return;
+    const title = taskDraftTitle.trim();
+    if (!title) return;
+    setSavingTask(true);
+    try {
+      const payload: { title: string; dueDate?: string } = { title };
+      if (taskDraftDueDate) payload.dueDate = new Date(taskDraftDueDate).toISOString();
+      await api.post(`/leads/${lead.id}/tasks`, payload);
+      setTaskDraftTitle('');
+      setTaskDraftDueDate('');
+      await fetchTasks(lead.id);
+    } catch (err) {
+      console.error('Failed to add task', err);
+    } finally {
+      setSavingTask(false);
+    }
+  }, [lead, taskDraftTitle, taskDraftDueDate, fetchTasks]);
+
+  const completeTask = useCallback(
+    async (taskId: string) => {
+      if (!lead) return;
+      try {
+        await api.patch(`/tasks/${taskId}/complete`);
+        await fetchTasks(lead.id);
+      } catch (err) {
+        console.error('Failed to complete task', err);
+      }
+    },
+    [lead, fetchTasks],
   );
 
   // ------ Custom field handlers ------
@@ -662,6 +725,14 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
             <Tabs defaultValue="details" className="flex-1 px-4 pb-4">
               <TabsList variant="line">
                 <TabsTrigger value="details">Detalhes</TabsTrigger>
+                <TabsTrigger value="tasks">
+                  Tarefas
+                  {tasks.filter((t) => !t.completedAt).length > 0 && (
+                    <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 py-0 text-[10px] font-semibold text-white">
+                      {tasks.filter((t) => !t.completedAt).length}
+                    </span>
+                  )}
+                </TabsTrigger>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
               </TabsList>
 
@@ -906,6 +977,105 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                     </span>
                   </div>
                 </div>
+              </TabsContent>
+
+              {/* -- Tasks Tab -- */}
+              <TabsContent value="tasks" className="pt-4">
+                {/* Add task box */}
+                <div className="mb-4 rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <Input
+                    value={taskDraftTitle}
+                    onChange={(e) => setTaskDraftTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        submitTask();
+                      }
+                    }}
+                    placeholder="O que precisa ser feito?"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="datetime-local"
+                      value={taskDraftDueDate}
+                      onChange={(e) => setTaskDraftDueDate(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={submitTask}
+                      disabled={savingTask || !taskDraftTitle.trim()}
+                    >
+                      <Plus className="size-3 mr-1" />
+                      {savingTask ? 'Salvando...' : 'Adicionar'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Tasks list */}
+                {tasks.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma tarefa. Adicione uma acima.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {tasks.map((task) => {
+                      const overdue =
+                        !task.completedAt &&
+                        task.dueDate &&
+                        new Date(task.dueDate) < new Date();
+                      return (
+                        <div
+                          key={task.id}
+                          className={
+                            'rounded-lg border p-3 ' +
+                            (task.completedAt
+                              ? 'bg-muted/40 opacity-60'
+                              : overdue
+                              ? 'border-red-300 bg-red-50/60'
+                              : 'bg-background')
+                          }
+                        >
+                          <div className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              checked={!!task.completedAt}
+                              disabled={!!task.completedAt}
+                              onChange={() => completeTask(task.id)}
+                              className="mt-1 h-4 w-4 rounded border-border"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className={
+                                  'text-sm font-medium ' +
+                                  (task.completedAt ? 'line-through' : '')
+                                }
+                              >
+                                {task.title}
+                              </p>
+                              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                {task.dueDate && (
+                                  <span
+                                    className={
+                                      overdue ? 'text-red-600 font-semibold' : ''
+                                    }
+                                  >
+                                    <CalendarIcon className="inline size-3 mr-0.5" />
+                                    {format(new Date(task.dueDate), "dd/MM/yyyy 'às' HH:mm")}
+                                    {overdue ? ' (atrasada)' : ''}
+                                  </span>
+                                )}
+                                {task.assignee && (
+                                  <span>· {task.assignee.name}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </TabsContent>
 
               {/* -- Timeline Tab -- */}

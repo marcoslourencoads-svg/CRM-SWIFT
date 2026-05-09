@@ -33,6 +33,9 @@ interface KanbanBoardProps {
   statuses: Status[];
   initialLeads: Lead[];
   onRefresh: () => void;
+  selectionMode?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelected?: (leadId: string) => void;
 }
 
 export function KanbanBoard({
@@ -40,6 +43,9 @@ export function KanbanBoard({
   statuses,
   initialLeads,
   onRefresh,
+  selectionMode,
+  selectedIds,
+  onToggleSelected,
 }: KanbanBoardProps) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -177,6 +183,9 @@ export function KanbanBoard({
               onAddLead={handleAddLead}
               onLeadClick={setSelectedLeadId}
               onLeadChanged={onRefresh}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelected={onToggleSelected}
             />
           ))}
         </div>
