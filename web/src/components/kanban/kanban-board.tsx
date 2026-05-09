@@ -176,6 +176,7 @@ export function KanbanBoard({
               leads={getLeadsForStatus(status.id)}
               onAddLead={handleAddLead}
               onLeadClick={setSelectedLeadId}
+              onLeadChanged={onRefresh}
             />
           ))}
         </div>

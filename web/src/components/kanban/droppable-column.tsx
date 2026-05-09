@@ -22,9 +22,10 @@ interface DroppableColumnProps {
   leads: Lead[];
   onAddLead: (statusId: string) => void;
   onLeadClick?: (leadId: string) => void;
+  onLeadChanged?: () => void;
 }
 
-export function DroppableColumn({ status, leads, onAddLead, onLeadClick }: DroppableColumnProps) {
+export function DroppableColumn({ status, leads, onAddLead, onLeadClick, onLeadChanged }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
 
   const totalValue = leads.reduce((sum, l) => sum + (l.estimatedValue || 0), 0);
@@ -72,7 +73,12 @@ export function DroppableColumn({ status, leads, onAddLead, onLeadClick }: Dropp
           strategy={verticalListSortingStrategy}
         >
           {leads.map((lead) => (
-            <LeadCard key={lead.id} lead={lead} onLeadClick={onLeadClick} />
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              onLeadClick={onLeadClick}
+              onLeadChanged={onLeadChanged}
+            />
           ))}
         </SortableContext>
       </div>

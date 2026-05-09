@@ -4,6 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivitiesService } from '../activities/activities.service';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
 
@@ -18,7 +19,10 @@ function hashString(s: string): number {
 
 @Injectable()
 export class TagsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activities: ActivitiesService,
+  ) {}
 
   async findAll(orgId: string) {
     return this.prisma.tag.findMany({
@@ -102,7 +106,7 @@ export class TagsService {
 
   // ─── Lead ↔ Tag Association ──────────────────────────────
 
-  async addTagToLead(orgId: string, leadId: string, tagId: string) {
+  async addTagToLead(orgId: string, leadId: string, tagId: string, userId?: string) {
     // Verify lead belongs to org
     const lead = await this.prisma.lead.findFirst({
       where: { id: leadId, organizationId: orgId, deletedAt: null },
@@ -116,15 +120,21 @@ export class TagsService {
     if (!tag) throw new NotFoundException('Tag not found');
 
     // Upsert to avoid duplicate errors
-    return this.prisma.leadTag.upsert({
+    const result = await this.prisma.leadTag.upsert({
       where: { leadId_tagId: { leadId, tagId } },
       update: {},
       create: { leadId, tagId },
       include: { tag: true },
     });
+
+    await this.activities.logActivity(leadId, userId ?? null, 'TAG_ADDED', {
+      tag: tag.name,
+    });
+
+    return result;
   }
 
-  async removeTagFromLead(orgId: string, leadId: string, tagId: string) {
+  async removeTagFromLead(orgId: string, leadId: string, tagId: string, userId?: string) {
     // Verify lead belongs to org
     const lead = await this.prisma.lead.findFirst({
       where: { id: leadId, organizationId: orgId, deletedAt: null },
@@ -133,11 +143,18 @@ export class TagsService {
 
     const existing = await this.prisma.leadTag.findUnique({
       where: { leadId_tagId: { leadId, tagId } },
+      include: { tag: true },
     });
     if (!existing) throw new NotFoundException('Tag not associated with this lead');
 
-    return this.prisma.leadTag.delete({
+    const result = await this.prisma.leadTag.delete({
       where: { leadId_tagId: { leadId, tagId } },
     });
+
+    await this.activities.logActivity(leadId, userId ?? null, 'TAG_REMOVED', {
+      tag: existing.tag.name,
+    });
+
+    return result;
   }
 }

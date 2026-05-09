@@ -41,6 +41,10 @@ export class LeadsController {
     @Query('statusId') statusId?: string,
     @Query('assigneeId') assigneeId?: string,
     @Query('search') search?: string,
+    @Query('temperature') temperature?: string,
+    @Query('tagIds') tagIds?: string,
+    @Query('createdAfter') createdAfter?: string,
+    @Query('createdBefore') createdBefore?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ) {
@@ -48,6 +52,10 @@ export class LeadsController {
       statusId,
       assigneeId,
       search,
+      temperature,
+      tagIds: tagIds ? tagIds.split(',').filter(Boolean) : undefined,
+      createdAfter,
+      createdBefore,
       limit: limit ? parseInt(limit, 10) : undefined,
       cursor,
     });
@@ -61,34 +69,41 @@ export class LeadsController {
   @Patch('leads/:id')
   update(
     @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
     @Param('id') id: string,
     @Body() dto: UpdateLeadDto,
   ) {
-    return this.service.update(orgId, id, dto);
+    return this.service.update(orgId, user.sub, id, dto);
   }
 
   @Patch('leads/:id/move')
   move(
     @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
     @Param('id') id: string,
     @Body() dto: MoveLeadDto,
   ) {
-    return this.service.move(orgId, id, dto);
+    return this.service.move(orgId, user.sub, id, dto);
   }
 
   @Patch('leads/:id/assign')
   assign(
     @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
     @Param('id') id: string,
     @Body() dto: AssignLeadDto,
   ) {
-    return this.service.assign(orgId, id, dto);
+    return this.service.assign(orgId, user.sub, id, dto);
   }
 
   @Delete('leads/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@CurrentOrg() orgId: string, @Param('id') id: string) {
-    return this.service.remove(orgId, id);
+  remove(
+    @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+  ) {
+    return this.service.remove(orgId, user.sub, id);
   }
 
   @Patch('leads/bulk/move')

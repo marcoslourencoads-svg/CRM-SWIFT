@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivitiesService } from '../activities/activities.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { MoveLeadDto } from './dto/move-lead.dto';
@@ -13,7 +14,10 @@ import { BulkMoveDto, BulkAssignDto, BulkDeleteDto } from './dto/bulk-action.dto
 
 @Injectable()
 export class LeadsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activities: ActivitiesService,
+  ) {}
 
   async create(orgId: string, userId: string, dto: CreateLeadDto) {
     let targetStatusId: string;
@@ -94,7 +98,7 @@ export class LeadsService {
       contactId = contact.id;
     }
 
-    return this.prisma.lead.create({
+    const lead = await this.prisma.lead.create({
       data: {
         organizationId: orgId,
         pipelineId: dto.pipelineId,
@@ -115,6 +119,12 @@ export class LeadsService {
         company: true,
       },
     });
+
+    await this.activities.logActivity(lead.id, userId, 'CREATED', {
+      title: lead.title,
+    });
+
+    return lead;
   }
 
   async findByPipeline(
@@ -124,6 +134,10 @@ export class LeadsService {
       statusId?: string;
       assigneeId?: string;
       search?: string;
+      tagIds?: string[];
+      temperature?: string;
+      createdAfter?: string | Date;
+      createdBefore?: string | Date;
       limit?: number;
       cursor?: string;
     },
@@ -136,6 +150,21 @@ export class LeadsService {
 
     if (filters?.statusId) where.statusId = filters.statusId;
     if (filters?.assigneeId) where.assigneeId = filters.assigneeId;
+    if (filters?.temperature) where.temperature = filters.temperature;
+
+    if (filters?.tagIds && filters.tagIds.length > 0) {
+      // Lead must have ALL tags listed.
+      where.AND = filters.tagIds.map((tagId) => ({
+        tags: { some: { tagId } },
+      }));
+    }
+
+    if (filters?.createdAfter || filters?.createdBefore) {
+      where.createdAt = {};
+      if (filters.createdAfter) where.createdAt.gte = new Date(filters.createdAfter);
+      if (filters.createdBefore) where.createdAt.lte = new Date(filters.createdBefore);
+    }
+
     if (filters?.search) {
       where.OR = [
         { title: { contains: filters.search, mode: 'insensitive' } },
@@ -154,6 +183,7 @@ export class LeadsService {
         assignee: { select: { id: true, name: true, avatarUrl: true } },
         contact: { select: { id: true, name: true, email: true, phone: true } },
         company: { select: { id: true, name: true } },
+        tags: { include: { tag: true } },
       },
       orderBy: [{ statusId: 'asc' }, { position: 'asc' }],
       take,
@@ -185,7 +215,7 @@ export class LeadsService {
     return lead;
   }
 
-  async update(orgId: string, id: string, dto: UpdateLeadDto) {
+  async update(orgId: string, userId: string, id: string, dto: UpdateLeadDto) {
     const lead = await this.findOne(orgId, id);
 
     // Optimistic locking
@@ -197,7 +227,7 @@ export class LeadsService {
 
     const { version, expectedCloseDate, ...data } = dto;
 
-    return this.prisma.lead.update({
+    const updated = await this.prisma.lead.update({
       where: { id },
       data: {
         ...data,
@@ -212,9 +242,25 @@ export class LeadsService {
         company: true,
       },
     });
+
+    const trackedFields = ['title', 'priority', 'temperature', 'estimatedValue', 'probability', 'lostReason'];
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const field of trackedFields) {
+      const dtoValue = (dto as any)[field];
+      if (dtoValue !== undefined && (lead as any)[field] !== dtoValue) {
+        changes[field] = { from: (lead as any)[field], to: dtoValue };
+      }
+    }
+    if (Object.keys(changes).length > 0) {
+      await this.activities.logActivity(id, userId, 'FIELD_UPDATED', {
+        changes: JSON.parse(JSON.stringify(changes)),
+      });
+    }
+
+    return updated;
   }
 
-  async move(orgId: string, id: string, dto: MoveLeadDto) {
+  async move(orgId: string, userId: string, id: string, dto: MoveLeadDto) {
     const lead = await this.findOne(orgId, id);
 
     // Verify status belongs to same pipeline
@@ -237,7 +283,7 @@ export class LeadsService {
 
     const now = new Date();
 
-    return this.prisma.lead.update({
+    const updated = await this.prisma.lead.update({
       where: { id },
       data: {
         statusId: dto.statusId,
@@ -256,12 +302,26 @@ export class LeadsService {
         company: { select: { id: true, name: true } },
       },
     });
+
+    if (lead.statusId !== dto.statusId) {
+      const fromName = (lead as any).status?.name ?? lead.statusId;
+      const toName = newStatus.name;
+      let activityType: 'STATUS_CHANGED' | 'LEAD_WON' | 'LEAD_LOST' = 'STATUS_CHANGED';
+      if (newStatus.isFinal && newStatus.isWon) activityType = 'LEAD_WON';
+      else if (newStatus.isFinal && !newStatus.isWon) activityType = 'LEAD_LOST';
+      await this.activities.logActivity(id, userId, activityType, {
+        from: fromName,
+        to: toName,
+      });
+    }
+
+    return updated;
   }
 
-  async assign(orgId: string, id: string, dto: AssignLeadDto) {
-    await this.findOne(orgId, id);
+  async assign(orgId: string, userId: string, id: string, dto: AssignLeadDto) {
+    const previous = await this.findOne(orgId, id);
 
-    return this.prisma.lead.update({
+    const updated = await this.prisma.lead.update({
       where: { id },
       data: {
         assigneeId: dto.assigneeId,
@@ -273,9 +333,17 @@ export class LeadsService {
         assignee: { select: { id: true, name: true, email: true } },
       },
     });
+
+    if (previous.assigneeId !== dto.assigneeId) {
+      await this.activities.logActivity(id, userId, 'ASSIGNED', {
+        assignee: updated.assignee?.name ?? null,
+      });
+    }
+
+    return updated;
   }
 
-  async remove(orgId: string, id: string) {
+  async remove(orgId: string, userId: string, id: string) {
     await this.findOne(orgId, id);
     return this.prisma.lead.update({
       where: { id },

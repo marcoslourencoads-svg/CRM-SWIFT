@@ -15,7 +15,8 @@ import { CreateFieldDefinitionDto } from './dto/create-field-definition.dto';
 import { UpdateFieldDefinitionDto } from './dto/update-field-definition.dto';
 import { SetFieldValuesDto } from './dto/set-field-values.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentOrg } from '../../common/decorators/current-user.decorator';
+import { CurrentOrg, CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { JwtUser } from '../../common/decorators/current-user.decorator';
 
 @Controller()
 export class CustomFieldsController {
@@ -59,10 +60,11 @@ export class CustomFieldsController {
   @Put('leads/:leadId/custom-fields')
   setValues(
     @CurrentOrg() _orgId: string,
+    @CurrentUser() user: JwtUser,
     @Param('leadId') leadId: string,
     @Body() dto: SetFieldValuesDto,
   ) {
-    return this.service.setValues(leadId, dto.values);
+    return this.service.setValues(leadId, dto.values, user.sub);
   }
 
   @Get('leads/:leadId/custom-fields')

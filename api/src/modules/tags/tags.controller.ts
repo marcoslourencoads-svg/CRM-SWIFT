@@ -12,7 +12,8 @@ import {
 import { TagsService } from './tags.service';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { UpdateTagDto } from './dto/update-tag.dto';
-import { CurrentOrg } from '../../common/decorators/current-user.decorator';
+import { CurrentOrg, CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 
 @Controller()
@@ -55,19 +56,21 @@ export class TagsController {
   @Post('leads/:leadId/tags')
   addTagToLead(
     @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
     @Param('leadId') leadId: string,
     @Body('tagId') tagId: string,
   ) {
-    return this.service.addTagToLead(orgId, leadId, tagId);
+    return this.service.addTagToLead(orgId, leadId, tagId, user.sub);
   }
 
   @Delete('leads/:leadId/tags/:tagId')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeTagFromLead(
     @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
     @Param('leadId') leadId: string,
     @Param('tagId') tagId: string,
   ) {
-    return this.service.removeTagFromLead(orgId, leadId, tagId);
+    return this.service.removeTagFromLead(orgId, leadId, tagId, user.sub);
   }
 }

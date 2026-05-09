@@ -42,6 +42,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LeadActionsMenu } from './lead-actions/lead-actions-menu';
+import { MarkLostDialog } from './lead-actions/mark-lost-dialog';
+import { MarkWonDialog } from './lead-actions/mark-won-dialog';
+import { DeleteLeadDialog } from './lead-actions/delete-lead-dialog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -238,6 +242,11 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
 
   // Custom field definitions for the lead's pipeline
   const [fieldDefinitions, setFieldDefinitions] = useState<CustomFieldDefinition[]>([]);
+
+  // Lead actions
+  const [showLostDialog, setShowLostDialog] = useState(false);
+  const [showWonDialog, setShowWonDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Local field state for controlled inputs
   const [estimatedValueDisplay, setEstimatedValueDisplay] = useState('');
@@ -531,10 +540,17 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                 </div>
               </div>
 
-              <Button variant="ghost" size="icon-sm" onClick={onClose}>
-                <X className="size-4" />
-                <span className="sr-only">Fechar</span>
-              </Button>
+              <div className="flex items-center gap-1">
+                <LeadActionsMenu
+                  onMarkWon={() => setShowWonDialog(true)}
+                  onMarkLost={() => setShowLostDialog(true)}
+                  onDelete={() => setShowDeleteDialog(true)}
+                />
+                <Button variant="ghost" size="icon-sm" onClick={onClose}>
+                  <X className="size-4" />
+                  <span className="sr-only">Fechar</span>
+                </Button>
+              </div>
             </SheetHeader>
 
             {/* Tags */}
@@ -1033,6 +1049,44 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
           </>
         )}
       </SheetContent>
+
+      {lead && (
+        <>
+          <MarkLostDialog
+            open={showLostDialog}
+            onOpenChange={setShowLostDialog}
+            leadId={lead.id}
+            pipelineId={lead.pipeline.id}
+            leadVersion={lead.version}
+            onSuccess={() => {
+              onLeadUpdated();
+              onClose();
+            }}
+          />
+          <MarkWonDialog
+            open={showWonDialog}
+            onOpenChange={setShowWonDialog}
+            leadId={lead.id}
+            pipelineId={lead.pipeline.id}
+            leadVersion={lead.version}
+            currentEstimatedValue={lead.estimatedValue}
+            onSuccess={() => {
+              onLeadUpdated();
+              onClose();
+            }}
+          />
+          <DeleteLeadDialog
+            open={showDeleteDialog}
+            onOpenChange={setShowDeleteDialog}
+            leadId={lead.id}
+            leadTitle={lead.title}
+            onSuccess={() => {
+              onLeadUpdated();
+              onClose();
+            }}
+          />
+        </>
+      )}
     </Sheet>
   );
 }

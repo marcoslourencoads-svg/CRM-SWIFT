@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ActivitiesService } from '../activities/activities.service';
 import { CreateFieldDefinitionDto } from './dto/create-field-definition.dto';
 import { UpdateFieldDefinitionDto } from './dto/update-field-definition.dto';
 import { FieldValueItemDto } from './dto/set-field-values.dto';
@@ -11,7 +12,10 @@ import { CustomFieldType } from '@prisma/client';
 
 @Injectable()
 export class CustomFieldsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activities: ActivitiesService,
+  ) {}
 
   private generateSlug(name: string): string {
     return name
@@ -102,7 +106,7 @@ export class CustomFieldsService {
     return { deleted: true };
   }
 
-  async setValues(leadId: string, items: FieldValueItemDto[]) {
+  async setValues(leadId: string, items: FieldValueItemDto[], userId?: string) {
     const fieldIds = items.map((i) => i.fieldDefinitionId);
     const definitions = await this.prisma.customFieldDefinition.findMany({
       where: { id: { in: fieldIds } },
@@ -136,7 +140,16 @@ export class CustomFieldsService {
       });
     });
 
-    return this.prisma.$transaction(upserts);
+    const result = await this.prisma.$transaction(upserts);
+
+    await this.activities.logActivity(leadId, userId ?? null, 'CUSTOM_FIELD_UPDATED', {
+      fields: items.map((it) => {
+        const def = defMap.get(it.fieldDefinitionId);
+        return { name: def?.name, value: it.value };
+      }),
+    });
+
+    return result;
   }
 
   async getValues(leadId: string) {
