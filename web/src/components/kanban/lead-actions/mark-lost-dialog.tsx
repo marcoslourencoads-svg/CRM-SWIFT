@@ -28,6 +28,11 @@ interface PipelineStatus {
   isWon: boolean;
 }
 
+interface LostReason {
+  id: string;
+  name: string;
+}
+
 interface MarkLostDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,7 +51,9 @@ export function MarkLostDialog({
   onSuccess,
 }: MarkLostDialogProps) {
   const [statuses, setStatuses] = useState<PipelineStatus[]>([]);
+  const [reasons, setReasons] = useState<LostReason[]>([]);
   const [selectedStatusId, setSelectedStatusId] = useState<string>('');
+  const [selectedReasonName, setSelectedReasonName] = useState<string>('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -60,6 +67,9 @@ export function MarkLostDialog({
         setSelectedStatusId(lostStatuses[0].id);
       }
     });
+    api.get('/lost-reasons').then((res) => {
+      setReasons(res.data.data ?? []);
+    }).catch(() => {});
   }, [open, pipelineId, selectedStatusId]);
 
   const submit = async () => {
@@ -67,20 +77,22 @@ export function MarkLostDialog({
       toast.error('Selecione um status final.');
       return;
     }
-    if (!reason.trim()) {
-      toast.error('Informe o motivo da perda.');
+    const finalReason = selectedReasonName || reason.trim();
+    if (!finalReason) {
+      toast.error('Selecione ou digite o motivo da perda.');
       return;
     }
     setSubmitting(true);
     try {
       await api.patch(`/leads/${leadId}/move`, { statusId: selectedStatusId });
       await api.patch(`/leads/${leadId}`, {
-        lostReason: reason.trim(),
+        lostReason: finalReason,
         version: leadVersion,
       });
       toast.success('Lead marcado como perdido');
       onOpenChange(false);
       setReason('');
+      setSelectedReasonName('');
       onSuccess?.();
     } catch {
       toast.error('Erro ao marcar lead como perdido');
@@ -129,12 +141,35 @@ export function MarkLostDialog({
 
           <div className="space-y-1">
             <Label>Motivo da perda *</Label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex: Sem orçamento, escolheu concorrente, sumiu..."
-              className="min-h-[80px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
+            {reasons.length > 0 ? (
+              <Select
+                value={selectedReasonName}
+                onValueChange={(val) => setSelectedReasonName(val ?? '')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um motivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reasons.map((r) => (
+                    <SelectItem key={r.id} value={r.name}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Ex: Sem orçamento, escolheu concorrente, sumiu..."
+                className="min-h-[80px] w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            )}
+            {reasons.length === 0 && (
+              <p className="text-[10px] text-muted-foreground">
+                Cadastre motivos em Configurações → Motivos de Perda pra ter um Select aqui.
+              </p>
+            )}
           </div>
         </div>
 

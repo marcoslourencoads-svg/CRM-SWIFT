@@ -32,12 +32,44 @@ model Organization {
   updatedAt DateTime @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  memberships  Membership[]
-  invitations  Invitation[]
-  pipelines    Pipeline[]
+  memberships       Membership[]
+  invitations       Invitation[]
+  pipelines         Pipeline[]
+  lostReasons       LostReason[]
+  whatsappTemplates WhatsappTemplate[]
 
   @@index([deletedAt])
   @@map("organizations")
+}
+
+model LostReason {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  position       Int      @default(0)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId, position])
+  @@map("lost_reasons")
+}
+
+model WhatsappTemplate {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  content        String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("whatsapp_templates")
 }
 
 model User {
@@ -727,4 +759,55 @@ model WebhookLog {
 
   @@index([webhookId, createdAt(sort: Desc)])
   @@map("webhook_logs")
+}
+
+// ─── Meta Ads Reports ───────────────────────────────────────
+
+enum MetaReportChannel {
+  TELEGRAM
+  EVOLUTION_WA
+  ZAPI_WA
+  MANUAL
+}
+
+model MetaAdAccount {
+  id              String            @id @default(cuid())
+  organizationId  String            @map("organization_id")
+  clientName      String            @map("client_name")
+  adAccountId     String            @map("ad_account_id")
+  accessTokenEnc  String            @map("access_token_enc")
+  reportChannel   MetaReportChannel @default(TELEGRAM) @map("report_channel")
+  reportTarget    String            @map("report_target")
+  scheduleCron    String            @default("0 8 * * *") @map("schedule_cron")
+  timezone        String            @default("America/Sao_Paulo")
+  active          Boolean           @default(true)
+  lastRunAt       DateTime?         @map("last_run_at")
+  lastError       String?           @map("last_error")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  reports MetaReport[]
+
+  @@unique([organizationId, adAccountId])
+  @@index([organizationId, active])
+  @@map("meta_ad_accounts")
+}
+
+model MetaReport {
+  id           String    @id @default(cuid())
+  accountId    String    @map("account_id")
+  periodStart  DateTime  @map("period_start")
+  periodEnd    DateTime  @map("period_end")
+  rawText      String    @map("raw_text")
+  rawData      Json      @map("raw_data")
+  totalSpend   Int       @default(0) @map("total_spend")
+  sentAt       DateTime? @map("sent_at")
+  sentChannel  String?   @map("sent_channel")
+  sendError    String?   @map("send_error")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  account MetaAdAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt(sort: Desc)])
+  @@map("meta_reports")
 }

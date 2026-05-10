@@ -46,6 +46,7 @@ import { LeadActionsMenu } from './lead-actions/lead-actions-menu';
 import { MarkLostDialog } from './lead-actions/mark-lost-dialog';
 import { MarkWonDialog } from './lead-actions/mark-won-dialog';
 import { DeleteLeadDialog } from './lead-actions/delete-lead-dialog';
+import { WhatsappDialog } from './lead-actions/whatsapp-dialog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -259,6 +260,7 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
   const [showLostDialog, setShowLostDialog] = useState(false);
   const [showWonDialog, setShowWonDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showWhatsappDialog, setShowWhatsappDialog] = useState(false);
 
   // Tasks
   const [tasks, setTasks] = useState<TaskEntry[]>([]);
@@ -604,6 +606,17 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
               </div>
 
               <div className="flex items-center gap-1">
+                {lead.contact?.phone && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setShowWhatsappDialog(true)}
+                    title="Mandar WhatsApp"
+                    className="text-emerald-600 hover:text-emerald-700"
+                  >
+                    <MessageSquare className="size-4" />
+                  </Button>
+                )}
                 <LeadActionsMenu
                   onMarkWon={() => setShowWonDialog(true)}
                   onMarkLost={() => setShowLostDialog(true)}
@@ -615,6 +628,47 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                 </Button>
               </div>
             </SheetHeader>
+
+            <MarkLostDialog
+              open={showLostDialog}
+              onOpenChange={setShowLostDialog}
+              leadId={lead.id}
+              pipelineId={lead.pipeline.id}
+              leadVersion={lead.version}
+              onSuccess={() => {
+                fetchLead(lead.id);
+                onLeadUpdated();
+              }}
+            />
+            <MarkWonDialog
+              open={showWonDialog}
+              onOpenChange={setShowWonDialog}
+              leadId={lead.id}
+              pipelineId={lead.pipeline.id}
+              leadVersion={lead.version}
+              currentEstimatedValue={lead.estimatedValue}
+              onSuccess={() => {
+                fetchLead(lead.id);
+                onLeadUpdated();
+              }}
+            />
+            <DeleteLeadDialog
+              open={showDeleteDialog}
+              onOpenChange={setShowDeleteDialog}
+              leadId={lead.id}
+              leadTitle={lead.title}
+              onSuccess={() => {
+                onClose();
+                onLeadUpdated();
+              }}
+            />
+            <WhatsappDialog
+              open={showWhatsappDialog}
+              onOpenChange={setShowWhatsappDialog}
+              leadName={lead.contact?.name ?? lead.title}
+              leadPhone={lead.contact?.phone ?? null}
+              companyName={lead.company?.name ?? null}
+            />
 
             {/* Tags */}
             <div className="px-6 pt-2 pb-0 flex flex-wrap items-center gap-1 min-h-[28px]">

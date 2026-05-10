@@ -11,6 +11,7 @@ import {
   Kanban,
   ChevronDown,
   BarChart3,
+  Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -28,6 +29,7 @@ interface Pipeline {
 const staticNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/meta-ads', label: 'Meta Ads', icon: BarChart3 },
+  { href: '/leads/import', label: 'Importar leads', icon: Upload },
   { href: '/settings/team', label: 'Time', icon: Users },
   { href: '/settings/organization', label: 'Configurações', icon: Settings },
 ];

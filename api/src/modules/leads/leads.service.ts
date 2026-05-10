@@ -192,6 +192,7 @@ export class LeadsService {
           where: { completedAt: null },
           select: { id: true, dueDate: true },
         },
+        score: { select: { score: true } },
       },
       orderBy: [{ statusId: 'asc' }, { position: 'asc' }],
       take,
@@ -217,6 +218,7 @@ export class LeadsService {
         customFieldValues: {
           include: { fieldDefinition: true },
         },
+        score: true,
       },
     });
     if (!lead) throw new NotFoundException('Lead not found');

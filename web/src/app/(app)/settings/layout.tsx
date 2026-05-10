@@ -9,6 +9,9 @@ import {
   Globe,
   Sliders,
   Users,
+  Target,
+  XCircle,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +21,9 @@ const settingsNav = [
   { href: '/settings/custom-fields', label: 'Campos Adicionais', icon: Sliders },
   { href: '/settings/tags', label: 'Tags', icon: Tags },
   { href: '/settings/lead-sources', label: 'Fontes de Origem', icon: Globe },
+  { href: '/settings/scoring', label: 'Lead Scoring', icon: Target },
+  { href: '/settings/lost-reasons', label: 'Motivos de Perda', icon: XCircle },
+  { href: '/settings/whatsapp-templates', label: 'Templates WhatsApp', icon: MessageSquare },
   { href: '/settings/team', label: 'Time', icon: Users },
 ];
 

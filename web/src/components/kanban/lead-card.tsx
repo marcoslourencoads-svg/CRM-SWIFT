@@ -59,6 +59,7 @@ export interface Lead {
     };
   }[];
   tasks?: { id: string; dueDate: string | null }[];
+  score?: { score: number } | null;
 }
 
 interface LeadCardProps {
@@ -141,11 +142,29 @@ export function LeadCard({
           </div>
         )}
         <div className="flex items-start justify-between gap-1">
-          <p className="text-sm font-medium leading-tight flex-1">{lead.title}</p>
+          <div className="flex items-start gap-1.5 flex-1 min-w-0">
+            {lead.score && lead.score.score > 0 && (
+              <span
+                className={cn(
+                  'inline-flex items-center justify-center rounded-full text-[10px] font-bold shrink-0 mt-0.5',
+                  'min-w-[24px] h-[18px] px-1',
+                  lead.score.score >= 61
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : lead.score.score >= 31
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-zinc-100 text-zinc-600',
+                )}
+                title={`Score: ${lead.score.score}`}
+              >
+                {lead.score.score}
+              </span>
+            )}
+            <p className="text-sm font-medium leading-tight flex-1">{lead.title}</p>
+          </div>
 
           {lead.pipelineId && lead.version !== undefined && (
             <div
-              className="opacity-0 group-hover:opacity-100 transition-opacity"
+              className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
