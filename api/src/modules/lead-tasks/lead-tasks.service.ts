@@ -46,7 +46,7 @@ export class LeadTasksService {
       data: {
         leadId,
         createdBy: userId,
-        assigneeId: dto.assigneeId,
+        assigneeId: dto.assigneeId ?? userId,
         title: dto.title,
         description: dto.description,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,

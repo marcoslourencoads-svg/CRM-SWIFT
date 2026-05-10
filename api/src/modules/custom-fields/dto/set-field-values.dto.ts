@@ -1,11 +1,12 @@
-import { IsArray, ValidateNested, IsString, IsNotEmpty } from 'class-validator';
+import { IsArray, ValidateNested, IsString, IsNotEmpty, Allow } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class FieldValueItemDto {
   @IsString()
   @IsNotEmpty()
-  fieldDefinitionId: string;
+  fieldDefinitionId!: string;
 
+  @Allow()
   value: any;
 }
 

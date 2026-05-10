@@ -21,8 +21,8 @@ export class CreateLeadTaskDto {
   dueDate?: string;
 
   @IsString()
-  @IsNotEmpty()
-  assigneeId: string;
+  @IsOptional()
+  assigneeId?: string;
 
   @IsEnum(LeadPriority)
   @IsOptional()
