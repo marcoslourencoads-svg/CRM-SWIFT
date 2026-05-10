@@ -32,13 +32,13 @@ const FIELD_OPTIONS = [
 ];
 
 const OPERATOR_OPTIONS = [
-  { value: 'equals', label: 'igual a' },
-  { value: 'not_equals', label: 'diferente de' },
-  { value: 'greater_than', label: 'maior que' },
-  { value: 'less_than', label: 'menor que' },
-  { value: 'contains', label: 'contém' },
-  { value: 'is_set', label: 'está preenchido' },
-  { value: 'is_not_set', label: 'está vazio' },
+  { value: 'EQUALS', label: 'igual a' },
+  { value: 'NOT_EQUALS', label: 'diferente de' },
+  { value: 'GREATER_THAN', label: 'maior que' },
+  { value: 'LESS_THAN', label: 'menor que' },
+  { value: 'CONTAINS', label: 'contém' },
+  { value: 'IS_SET', label: 'está preenchido' },
+  { value: 'IS_NOT_SET', label: 'está vazio' },
 ];
 
 interface ScoringRule {
@@ -57,7 +57,7 @@ export default function ScoringPage() {
   const [editing, setEditing] = useState<ScoringRule | null>(null);
   const [name, setName] = useState('');
   const [field, setField] = useState('priority');
-  const [operator, setOperator] = useState('equals');
+  const [operator, setOperator] = useState('EQUALS');
   const [value, setValue] = useState('');
   const [points, setPoints] = useState('10');
 
@@ -76,7 +76,7 @@ export default function ScoringPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setName(''); setField('priority'); setOperator('equals'); setValue(''); setPoints('10');
+    setName(''); setField('priority'); setOperator('EQUALS'); setValue(''); setPoints('10');
     setDialogOpen(true);
   };
 
@@ -94,7 +94,7 @@ export default function ScoringPage() {
     if (!name.trim()) return toast.error('Informe o nome');
     const numericPoints = parseInt(points, 10) || 0;
     const condition: { field: string; operator: string; value?: string } = { field, operator };
-    if (operator !== 'is_set' && operator !== 'is_not_set') {
+    if (operator !== 'IS_SET' && operator !== 'IS_NOT_SET') {
       condition.value = value;
     }
     try {
@@ -214,7 +214,7 @@ export default function ScoringPage() {
               </div>
               <div className="space-y-1">
                 <Label>Operador</Label>
-                <Select value={operator} onValueChange={(v) => setOperator(v ?? 'equals')}>
+                <Select value={operator} onValueChange={(v) => setOperator(v ?? 'EQUALS')}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {OPERATOR_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -222,7 +222,7 @@ export default function ScoringPage() {
                 </Select>
               </div>
             </div>
-            {operator !== 'is_set' && operator !== 'is_not_set' && (
+            {operator !== 'IS_SET' && operator !== 'IS_NOT_SET' && (
               <div className="space-y-1">
                 <Label>Valor</Label>
                 <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Ex: HIGH, HOT, 100000" />
