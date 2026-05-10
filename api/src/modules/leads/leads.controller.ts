@@ -66,6 +66,22 @@ export class LeadsController {
     return this.service.findOne(orgId, id);
   }
 
+  // Bulk routes precisam vir ANTES das rotas com :id, senão "bulk" vira o id.
+  @Patch('leads/bulk/move')
+  bulkMove(@CurrentOrg() orgId: string, @Body() dto: BulkMoveDto) {
+    return this.service.bulkMove(orgId, dto);
+  }
+
+  @Patch('leads/bulk/assign')
+  bulkAssign(@CurrentOrg() orgId: string, @Body() dto: BulkAssignDto) {
+    return this.service.bulkAssign(orgId, dto);
+  }
+
+  @Patch('leads/bulk/delete')
+  bulkDelete(@CurrentOrg() orgId: string, @Body() dto: BulkDeleteDto) {
+    return this.service.bulkDelete(orgId, dto);
+  }
+
   @Patch('leads/:id')
   update(
     @CurrentOrg() orgId: string,
@@ -104,20 +120,5 @@ export class LeadsController {
     @Param('id') id: string,
   ) {
     return this.service.remove(orgId, user.sub, id);
-  }
-
-  @Patch('leads/bulk/move')
-  bulkMove(@CurrentOrg() orgId: string, @Body() dto: BulkMoveDto) {
-    return this.service.bulkMove(orgId, dto);
-  }
-
-  @Patch('leads/bulk/assign')
-  bulkAssign(@CurrentOrg() orgId: string, @Body() dto: BulkAssignDto) {
-    return this.service.bulkAssign(orgId, dto);
-  }
-
-  @Patch('leads/bulk/delete')
-  bulkDelete(@CurrentOrg() orgId: string, @Body() dto: BulkDeleteDto) {
-    return this.service.bulkDelete(orgId, dto);
   }
 }
