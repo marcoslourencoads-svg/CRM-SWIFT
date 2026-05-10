@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
-import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -24,7 +23,6 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { LeadTrackingModule } from './modules/lead-tracking/lead-tracking.module';
 import { PublicApiModule } from './modules/public-api/public-api.module';
-import { MetaAdsReportsModule } from './modules/meta-ads-reports/meta-ads-reports.module';
 import { LostReasonsModule } from './modules/lost-reasons/lost-reasons.module';
 import { WhatsappTemplatesModule } from './modules/whatsapp-templates/whatsapp-templates.module';
 import { validateEnv } from './common/config/env.validation';
@@ -40,7 +38,6 @@ import { HealthController } from './health.controller';
       validate: validateEnv,
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
-    ScheduleModule.forRoot(),
     JwtModule.register({}),
     PrismaModule,
     AuthModule,
@@ -62,7 +59,6 @@ import { HealthController } from './health.controller';
     ApiKeysModule,
     LeadTrackingModule,
     PublicApiModule,
-    MetaAdsReportsModule,
     LostReasonsModule,
     WhatsappTemplatesModule,
   ],
