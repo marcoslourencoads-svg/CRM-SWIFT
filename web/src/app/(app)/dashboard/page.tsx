@@ -128,7 +128,8 @@ export default function DashboardPage() {
     api.get('/pipelines').then(({ data }) => {
       const list: Pipeline[] = data.data ?? data;
       setPipelines(list);
-      if (list.length > 0) setSelectedPipeline(list[0].id);
+      // Default: agregar todos os pipelines (vazio = todos no backend)
+      setSelectedPipeline('__all__');
     });
   }, []);
 
@@ -138,9 +139,11 @@ export default function DashboardPage() {
     setLoadingKpis(true);
     try {
       const { dateFrom, dateTo } = getDateRange(period);
-      const { data } = await api.get('/dashboard/kpis', {
-        params: { pipelineId: selectedPipeline, dateFrom, dateTo },
-      });
+      const params: Record<string, string | undefined> = { dateFrom, dateTo };
+      if (selectedPipeline && selectedPipeline !== '__all__') {
+        params.pipelineId = selectedPipeline;
+      }
+      const { data } = await api.get('/dashboard/kpis', { params });
       setKpis(data.data);
     } catch {
       /* silently ignore */
@@ -168,7 +171,11 @@ export default function DashboardPage() {
 
   // Fetch funnel
   const fetchFunnel = useCallback(async () => {
-    if (!selectedPipeline) return;
+    if (!selectedPipeline || selectedPipeline === '__all__') {
+      setFunnel([]);
+      setLoadingFunnel(false);
+      return;
+    }
     setLoadingFunnel(true);
     try {
       const { data } = await api.get(`/dashboard/funnel/${selectedPipeline}`);
@@ -241,6 +248,7 @@ export default function DashboardPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__all__">Todos os pipelines</SelectItem>
               {pipelines.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name}
