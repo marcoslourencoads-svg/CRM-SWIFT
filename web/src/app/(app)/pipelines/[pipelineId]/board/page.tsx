@@ -144,12 +144,10 @@ export default function BoardPage() {
   // Load tags + members once
   useEffect(() => {
     api.get('/tags').then((res) => setTags(res.data.data ?? [])).catch(() => {});
-    api.get('/memberships').then((res) => {
-      const list = res.data.data ?? [];
-      setMembers(
-        list.map((m: { user: Member }) => m.user).filter((u: Member | undefined) => u !== undefined),
-      );
-    }).catch(() => {});
+    api
+      .get('/members')
+      .then((res) => setMembers(res.data.data ?? []))
+      .catch(() => {});
   }, []);
 
   const toggleTag = (tagId: string) => {
