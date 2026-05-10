@@ -57,9 +57,40 @@ export function NotificationsPopover() {
 
   useEffect(() => {
     fetchUnreadCount();
-    const t = setInterval(fetchUnreadCount, 60000); // refresh a cada minuto
-    return () => clearInterval(t);
-  }, [fetchUnreadCount]);
+
+    // Tenta conexão SSE real-time. Se falhar, mantém polling como fallback.
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+
+    if (!token) {
+      const interval = setInterval(fetchUnreadCount, 60000);
+      return () => clearInterval(interval);
+    }
+
+    const es = new EventSource(`${apiUrl}/notifications/stream?token=${encodeURIComponent(token)}`);
+
+    es.addEventListener('notification.created', () => {
+      // refresh tanto o contador quanto a lista (se popover estiver aberto)
+      fetchUnreadCount();
+      if (open) fetchList();
+    });
+
+    es.addEventListener('connected', () => {
+      // SSE ativo — poderia desativar polling, mas mantemos refresh a cada 5min como safety net
+    });
+
+    es.onerror = () => {
+      // Em caso de erro, o browser tenta reconectar automaticamente.
+      // Não fechamos a conexão aqui.
+    };
+
+    const safetyRefresh = setInterval(fetchUnreadCount, 5 * 60 * 1000);
+
+    return () => {
+      es.close();
+      clearInterval(safetyRefresh);
+    };
+  }, [fetchUnreadCount, fetchList, open]);
 
   useEffect(() => {
     if (open) {

@@ -5,15 +5,74 @@ import {
   Param,
   Query,
   Body,
+  Req,
+  Res,
+  UnauthorizedException,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from './notifications.service';
+import { NotificationsPublisher } from './notifications.publisher';
 import { UpdatePreferenceDto } from './dto/update-preference.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly service: NotificationsService) {}
+  constructor(
+    private readonly service: NotificationsService,
+    private readonly publisher: NotificationsPublisher,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  /**
+   * SSE stream. EventSource não suporta headers customizados, então o token
+   * vai via query param `?token=`. Validado manualmente; rota é Public pra
+   * bypassar o JwtAuthGuard.
+   *
+   * Mantém Content-Type: text/event-stream e Cache-Control: no-cache.
+   * Envia heartbeat a cada 25s pra evitar timeout em proxies.
+   */
+  @Public()
+  @Get('stream')
+  async stream(
+    @Query('token') token: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    if (!token) throw new UnauthorizedException('Missing token');
+
+    let payload: { sub: string };
+    try {
+      payload = await this.jwtService.verifyAsync(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // nginx
+    res.flushHeaders?.();
+
+    res.write(`event: connected\ndata: ${JSON.stringify({ at: Date.now() })}\n\n`);
+    this.publisher.register(payload.sub, res);
+
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`: heartbeat ${Date.now()}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+      }
+    }, 25000);
+
+    req.on('close', () => clearInterval(heartbeat));
+  }
 
   @Get()
   findAll(

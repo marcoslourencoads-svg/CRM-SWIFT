@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationType, Prisma } from '@prisma/client';
+import { NotificationsPublisher } from './notifications.publisher';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly publisher: NotificationsPublisher,
+  ) {}
 
   async create(
     orgId: string,
@@ -14,7 +18,7 @@ export class NotificationsService {
     body: string,
     metadata?: Record<string, unknown>,
   ) {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         organizationId: orgId,
         recipientId,
@@ -24,6 +28,11 @@ export class NotificationsService {
         metadata: (metadata ?? {}) as Prisma.InputJsonValue,
       },
     });
+
+    // Push real-time pro recipient (se estiver conectado via SSE)
+    this.publisher.publish(recipientId, 'notification.created', notification);
+
+    return notification;
   }
 
   async findByUser(userId: string, cursor?: string, limit = 20) {
