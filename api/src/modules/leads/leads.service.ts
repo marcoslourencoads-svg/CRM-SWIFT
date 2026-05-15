@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
+import { PipelinePermissionsService } from '../pipelines/pipeline-permissions.service';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { MoveLeadDto } from './dto/move-lead.dto';
@@ -17,6 +18,7 @@ export class LeadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activities: ActivitiesService,
+    private readonly pipelinePermissions: PipelinePermissionsService,
   ) {}
 
   async create(orgId: string, userId: string, dto: CreateLeadDto) {
@@ -141,12 +143,26 @@ export class LeadsService {
       limit?: number;
       cursor?: string;
     },
+    requesterUser?: { userId: string; role: string },
   ) {
     const where: any = {
       organizationId: orgId,
       pipelineId,
       deletedAt: null,
     };
+
+    // Permission per pipeline: se requester não pode ver todos os leads,
+    // limita aos atribuídos a ele.
+    if (requesterUser) {
+      const perms = await this.pipelinePermissions.getEffectivePermissions(
+        requesterUser.userId,
+        pipelineId,
+        requesterUser.role,
+      );
+      if (!perms.canSeeAllLeads) {
+        where.assigneeId = requesterUser.userId;
+      }
+    }
 
     if (filters?.statusId) where.statusId = filters.statusId;
     if (filters?.assigneeId) where.assigneeId = filters.assigneeId;

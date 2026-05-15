@@ -37,6 +37,7 @@ export class LeadsController {
   @Get('pipelines/:pipelineId/leads')
   findByPipeline(
     @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
     @Param('pipelineId') pipelineId: string,
     @Query('statusId') statusId?: string,
     @Query('assigneeId') assigneeId?: string,
@@ -48,17 +49,22 @@ export class LeadsController {
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ) {
-    return this.service.findByPipeline(orgId, pipelineId, {
-      statusId,
-      assigneeId,
-      search,
-      temperature,
-      tagIds: tagIds ? tagIds.split(',').filter(Boolean) : undefined,
-      createdAfter,
-      createdBefore,
-      limit: limit ? parseInt(limit, 10) : undefined,
-      cursor,
-    });
+    return this.service.findByPipeline(
+      orgId,
+      pipelineId,
+      {
+        statusId,
+        assigneeId,
+        search,
+        temperature,
+        tagIds: tagIds ? tagIds.split(',').filter(Boolean) : undefined,
+        createdAfter,
+        createdBefore,
+        limit: limit ? parseInt(limit, 10) : undefined,
+        cursor,
+      },
+      { userId: user.sub, role: user.role },
+    );
   }
 
   @Get('leads/:id')

@@ -43,6 +43,22 @@ model Organization {
   @@map("organizations")
 }
 
+model PipelineMembership {
+  id             String   @id @default(cuid())
+  pipelineId     String   @map("pipeline_id")
+  userId         String   @map("user_id")
+  canEdit        Boolean  @default(true) @map("can_edit")
+  canSeeAllLeads Boolean  @default(false) @map("can_see_all_leads")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, userId])
+  @@index([userId])
+  @@map("pipeline_memberships")
+}
+
 model SavedView {
   id             String   @id @default(cuid())
   organizationId String   @map("organization_id")
@@ -167,6 +183,7 @@ model Pipeline {
   transitionRules      TransitionRule[]
   leads                Lead[]
   customFieldDefinitions CustomFieldDefinition[]
+  memberships          PipelineMembership[]
 
   @@index([organizationId, deletedAt])
   @@map("pipelines")
