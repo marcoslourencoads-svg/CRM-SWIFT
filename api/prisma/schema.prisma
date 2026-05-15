@@ -37,9 +37,28 @@ model Organization {
   pipelines         Pipeline[]
   lostReasons       LostReason[]
   whatsappTemplates WhatsappTemplate[]
+  savedViews        SavedView[]
 
   @@index([deletedAt])
   @@map("organizations")
+}
+
+model SavedView {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String   @map("user_id")
+  name           String
+  pipelineId     String?  @map("pipeline_id")
+  filters        Json
+  isShared       Boolean  @default(false) @map("is_shared")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId])
+  @@index([organizationId, isShared])
+  @@map("saved_views")
 }
 
 model LostReason {

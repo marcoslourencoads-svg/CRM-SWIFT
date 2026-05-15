@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutGrid, List, Search, X, CheckSquare, Trash2, ArrowRight } from 'lucide-react';
+import { LayoutGrid, List, Search, X, CheckSquare, Trash2, ArrowRight, BookmarkPlus, Bookmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
@@ -47,6 +47,21 @@ interface Member {
   email: string;
 }
 
+interface SavedView {
+  id: string;
+  userId: string;
+  name: string;
+  pipelineId: string | null;
+  filters: {
+    search?: string;
+    tagIds?: string[];
+    temperature?: string;
+    assigneeId?: string;
+    dateRange?: string;
+  };
+  isShared: boolean;
+}
+
 const TEMPERATURE_OPTIONS = [
   { value: 'COLD', label: 'Frio' },
   { value: 'WARM', label: 'Morno' },
@@ -76,6 +91,10 @@ export default function BoardPage() {
   const [filterTemperature, setFilterTemperature] = useState<string>('');
   const [filterAssigneeId, setFilterAssigneeId] = useState<string>('');
   const [filterDateRange, setFilterDateRange] = useState<string>('');
+
+  // Saved views
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [savingView, setSavingView] = useState(false);
 
   // Bulk selection
   const [selectionMode, setSelectionMode] = useState(false);
@@ -141,14 +160,64 @@ export default function BoardPage() {
     fetchData();
   }, [fetchData]);
 
-  // Load tags + members once
+  // Load tags + members + saved views once
   useEffect(() => {
     api.get('/tags').then((res) => setTags(res.data.data ?? [])).catch(() => {});
     api
       .get('/members')
       .then((res) => setMembers(res.data.data ?? []))
       .catch(() => {});
+    api
+      .get('/saved-views')
+      .then((res) => setSavedViews(res.data.data ?? []))
+      .catch(() => {});
   }, []);
+
+  const applyView = (view: SavedView) => {
+    setSearch(view.filters.search ?? '');
+    setFilterTagIds(view.filters.tagIds ?? []);
+    setFilterTemperature(view.filters.temperature ?? '');
+    setFilterAssigneeId(view.filters.assigneeId ?? '');
+    setFilterDateRange(view.filters.dateRange ?? '');
+    toast.success(`Lista "${view.name}" aplicada`);
+  };
+
+  const saveCurrentAsView = async () => {
+    const name = prompt('Nome da lista (ex: Hot Delivery do mês):');
+    if (!name?.trim()) return;
+    setSavingView(true);
+    try {
+      const res = await api.post('/saved-views', {
+        name: name.trim(),
+        pipelineId,
+        filters: {
+          search,
+          tagIds: filterTagIds,
+          temperature: filterTemperature,
+          assigneeId: filterAssigneeId,
+          dateRange: filterDateRange,
+        },
+        isShared: false,
+      });
+      setSavedViews((prev) => [...prev, res.data.data]);
+      toast.success('Lista salva');
+    } catch {
+      toast.error('Erro ao salvar lista');
+    } finally {
+      setSavingView(false);
+    }
+  };
+
+  const deleteView = async (id: string) => {
+    if (!confirm('Apagar essa lista salva?')) return;
+    try {
+      await api.delete(`/saved-views/${id}`);
+      setSavedViews((prev) => prev.filter((v) => v.id !== id));
+      toast.success('Lista apagada');
+    } catch {
+      toast.error('Erro ao apagar');
+    }
+  };
 
   const toggleTag = (tagId: string) => {
     setFilterTagIds((prev) =>
@@ -224,6 +293,34 @@ export default function BoardPage() {
         </div>
       </div>
 
+      {/* Saved views bar */}
+      {savedViews.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <Bookmark className="size-3 text-muted-foreground" />
+          <span className="text-muted-foreground mr-1">Listas:</span>
+          {savedViews.map((v) => (
+            <span key={v.id} className="inline-flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => applyView(v)}
+                className="rounded-full border border-border bg-background px-2 py-0.5 hover:bg-muted"
+              >
+                {v.name}
+                {v.isShared && <span className="ml-1 text-muted-foreground">·</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteView(v.id)}
+                className="text-muted-foreground hover:text-destructive ml-0.5"
+                aria-label="Remover lista"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px] max-w-md">
@@ -288,10 +385,21 @@ export default function BoardPage() {
         </Select>
 
         {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <X className="mr-1 size-3" />
-            Limpar
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={saveCurrentAsView}
+              disabled={savingView}
+            >
+              <BookmarkPlus className="mr-1 size-3" />
+              {savingView ? 'Salvando...' : 'Salvar lista'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="mr-1 size-3" />
+              Limpar
+            </Button>
+          </>
         )}
       </div>
 
