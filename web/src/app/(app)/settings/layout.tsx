@@ -12,6 +12,7 @@ import {
   Target,
   XCircle,
   MessageSquare,
+  ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,7 @@ const settingsNav = [
   { href: '/settings/lost-reasons', label: 'Motivos de Perda', icon: XCircle },
   { href: '/settings/whatsapp-templates', label: 'Templates WhatsApp', icon: MessageSquare },
   { href: '/settings/team', label: 'Time', icon: Users },
+  { href: '/settings/audit', label: 'Audit Log', icon: ScrollText },
 ];
 
 export default function SettingsLayout({
