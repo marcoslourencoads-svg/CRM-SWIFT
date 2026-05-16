@@ -1,8 +1,20 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, CheckCircle2, Target } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
+import { CalendarDays, ChevronLeft, ChevronRight, CheckCircle2, Target, X } from 'lucide-react';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+  subMonths,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  isToday,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -33,36 +45,41 @@ interface Pipeline {
   name: string;
 }
 
-const PRIORITY_COLORS: Record<string, string> = {
-  LOW: 'bg-slate-100 text-slate-700 border-slate-200',
-  MEDIUM: 'bg-blue-100 text-blue-700 border-blue-200',
-  HIGH: 'bg-orange-100 text-orange-700 border-orange-200',
-  URGENT: 'bg-red-100 text-red-700 border-red-200',
+const PRIORITY_DOT: Record<string, string> = {
+  LOW: 'bg-slate-400',
+  MEDIUM: 'bg-blue-500',
+  HIGH: 'bg-orange-500',
+  URGENT: 'bg-red-500',
 };
+
+const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
 export default function CalendarPage() {
   const [refDate, setRefDate] = useState(new Date());
   const [tasks, setTasks] = useState<TaskEvent[]>([]);
   const [leads, setLeads] = useState<LeadEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        // Tasks do mês
-        const tasksRes = await api.get('/tasks/mine?status=pending');
         const monthStart = startOfMonth(refDate);
         const monthEnd = endOfMonth(refDate);
-        const tasksInMonth: TaskEvent[] = (tasksRes.data.data ?? []).filter(
+        // Carrega 1 semana antes e depois pra preencher a grid
+        const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+        const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+
+        const tasksRes = await api.get('/tasks/mine');
+        const tasksInRange: TaskEvent[] = (tasksRes.data.data ?? []).filter(
           (t: TaskEvent) =>
             t.dueDate &&
-            new Date(t.dueDate) >= monthStart &&
-            new Date(t.dueDate) <= monthEnd,
+            new Date(t.dueDate) >= gridStart &&
+            new Date(t.dueDate) <= gridEnd,
         );
-        setTasks(tasksInMonth);
+        setTasks(tasksInRange);
 
-        // Leads com expectedCloseDate no mês — pra cada pipeline do user
         const pipelinesRes = await api.get('/pipelines');
         const allPipelines: Pipeline[] = pipelinesRes.data.data ?? [];
 
@@ -75,8 +92,8 @@ export default function CalendarPage() {
                   .filter(
                     (l: LeadEvent) =>
                       l.expectedCloseDate &&
-                      new Date(l.expectedCloseDate) >= monthStart &&
-                      new Date(l.expectedCloseDate) <= monthEnd,
+                      new Date(l.expectedCloseDate) >= gridStart &&
+                      new Date(l.expectedCloseDate) <= gridEnd,
                   )
                   .map((l: LeadEvent) => ({ ...l, pipelineId: p.id })),
               )
@@ -93,7 +110,14 @@ export default function CalendarPage() {
     load();
   }, [refDate]);
 
-  // Agrupa eventos por dia do mês
+  // Grid days = todas as células do mês incluindo dias do mês anterior/próximo pra completar semanas
+  const gridDays = useMemo(() => {
+    const start = startOfWeek(startOfMonth(refDate), { weekStartsOn: 1 });
+    const end = endOfWeek(endOfMonth(refDate), { weekStartsOn: 1 });
+    return eachDayOfInterval({ start, end });
+  }, [refDate]);
+
+  // Eventos agrupados por dia (yyyy-MM-dd)
   const eventsByDay = useMemo(() => {
     const map = new Map<string, { tasks: TaskEvent[]; leads: LeadEvent[] }>();
     for (const t of tasks) {
@@ -111,12 +135,16 @@ export default function CalendarPage() {
     return map;
   }, [tasks, leads]);
 
+  const selectedEvents = selectedDay
+    ? eventsByDay.get(format(selectedDay, 'yyyy-MM-dd'))
+    : null;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CalendarDays className="size-5 text-muted-foreground" />
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold capitalize">
             {format(refDate, "MMMM 'de' yyyy", { locale: ptBR })}
           </h1>
         </div>
@@ -134,69 +162,149 @@ export default function CalendarPage() {
       </div>
 
       {loading ? (
-        <Skeleton className="h-96 w-full" />
-      ) : eventsByDay.size === 0 ? (
-        <div className="rounded-lg border bg-muted/20 p-12 text-center text-sm text-muted-foreground">
-          Nenhuma tarefa ou lead com previsão de fechamento neste mês.
-        </div>
+        <Skeleton className="h-[600px] w-full" />
       ) : (
-        <div className="space-y-3">
-          {Array.from(eventsByDay.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([day, evts]) => (
-              <div key={day} className="rounded-lg border">
-                <div className="border-b bg-muted/30 px-3 py-2">
-                  <p className="text-sm font-semibold">
-                    {format(new Date(day), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-                  </p>
-                </div>
-                <div className="divide-y">
-                  {evts.tasks.map((t) => (
-                    <div key={'t-' + t.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                      <span
+        <div className="overflow-hidden rounded-lg border bg-background">
+          {/* Header dos dias da semana */}
+          <div className="grid grid-cols-7 border-b bg-muted/30">
+            {WEEKDAYS.map((d) => (
+              <div
+                key={d}
+                className="px-2 py-2 text-center text-xs font-semibold uppercase text-muted-foreground"
+              >
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Grid de dias */}
+          <div className="grid grid-cols-7 auto-rows-fr">
+            {gridDays.map((day, idx) => {
+              const key = format(day, 'yyyy-MM-dd');
+              const events = eventsByDay.get(key);
+              const inMonth = isSameMonth(day, refDate);
+              const today = isToday(day);
+              const totalEvents = (events?.tasks.length ?? 0) + (events?.leads.length ?? 0);
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedDay(day)}
+                  className={cn(
+                    'flex min-h-[110px] flex-col gap-1 border-b border-r p-1.5 text-left transition-colors',
+                    !inMonth && 'bg-muted/20 text-muted-foreground',
+                    today && 'bg-blue-50/50',
+                    'hover:bg-muted/30',
+                    idx % 7 === 6 && 'border-r-0',
+                    idx >= gridDays.length - 7 && 'border-b-0',
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={cn(
+                        'flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold',
+                        today && 'bg-blue-600 text-white',
+                      )}
+                    >
+                      {format(day, 'd')}
+                    </span>
+                    {totalEvents > 3 && (
+                      <span className="text-[10px] text-muted-foreground">
+                        +{totalEvents - 3}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-0.5 overflow-hidden">
+                    {events?.tasks.slice(0, 2).map((t) => (
+                      <div
+                        key={t.id}
                         className={cn(
-                          'inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
-                          PRIORITY_COLORS[t.priority] ?? PRIORITY_COLORS.MEDIUM,
+                          'flex items-center gap-1 truncate rounded px-1 py-0.5 text-[10px]',
+                          t.completedAt
+                            ? 'bg-zinc-100 text-zinc-500 line-through'
+                            : 'bg-blue-100 text-blue-700',
                         )}
                       >
-                        <CheckCircle2 className="mr-0.5 size-3" />
-                        Tarefa
-                      </span>
-                      <span className="font-medium">{t.title}</span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-muted-foreground">
-                        {format(new Date(t.dueDate), 'HH:mm')}
-                      </span>
-                      <span className="text-muted-foreground">·</span>
-                      <Link
-                        href={`#`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {t.lead.title}
-                      </Link>
-                    </div>
-                  ))}
-                  {evts.leads.map((l) => (
-                    <div key={'l-' + l.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                      <span
-                        className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                        <span
+                          className={cn(
+                            'h-1.5 w-1.5 shrink-0 rounded-full',
+                            PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.MEDIUM,
+                          )}
+                        />
+                        <CheckCircle2 className="size-2.5 shrink-0" />
+                        <span className="truncate">{t.title}</span>
+                      </div>
+                    ))}
+                    {events?.leads.slice(0, Math.max(0, 3 - (events?.tasks.length ?? 0))).map((l) => (
+                      <div
+                        key={l.id}
+                        className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] text-white"
                         style={{ backgroundColor: l.status.color }}
                       >
-                        <Target className="mr-0.5 size-3" />
-                        Fechamento
-                      </span>
-                      <Link
-                        href={`/pipelines/${l.pipelineId}/board`}
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {l.title}
-                      </Link>
-                      <span className="text-muted-foreground">· {l.status.name}</span>
-                    </div>
-                  ))}
+                        <Target className="size-2.5 shrink-0" />
+                        <span className="truncate">{l.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Side panel ao clicar num dia */}
+      {selectedDay && selectedEvents && (selectedEvents.tasks.length > 0 || selectedEvents.leads.length > 0) && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold capitalize">
+              {format(selectedDay, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+            </h2>
+            <Button variant="ghost" size="icon-sm" onClick={() => setSelectedDay(null)}>
+              <X className="size-3" />
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {selectedEvents.tasks.map((t) => (
+              <div key={t.id} className="flex items-start gap-2 rounded-md border p-2 text-sm">
+                <span
+                  className={cn(
+                    'mt-1.5 h-2 w-2 shrink-0 rounded-full',
+                    PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.MEDIUM,
+                  )}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className={cn('font-medium', t.completedAt && 'line-through text-muted-foreground')}>
+                    {t.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(t.dueDate), 'HH:mm')} · {t.lead.title}
+                  </p>
                 </div>
               </div>
             ))}
+            {selectedEvents.leads.map((l) => (
+              <Link
+                key={l.id}
+                href={`/pipelines/${l.pipelineId}/board`}
+                className="flex items-start gap-2 rounded-md border p-2 text-sm hover:bg-muted/30"
+              >
+                <span
+                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: l.status.color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">{l.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Previsão de fechamento · {l.status.name}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>
