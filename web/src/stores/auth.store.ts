@@ -8,6 +8,8 @@ interface AuthUser {
 interface AuthOrg {
   id: string;
   role: string;
+  name?: string;
+  onboardedAt?: string | null;
 }
 
 interface AuthState {

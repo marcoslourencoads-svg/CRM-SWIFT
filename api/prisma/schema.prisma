@@ -28,6 +28,11 @@ model Organization {
   slug      String   @unique
   logoUrl   String?  @map("logo_url")
   settings  Json     @default("{}")
+  industry      String?  @map("industry")
+  teamSize      String?  @map("team_size")
+  mainGoal      String?  @map("main_goal")
+  leadSourcesInitial String[] @default([]) @map("lead_sources_initial")
+  onboardedAt   DateTime? @map("onboarded_at")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
