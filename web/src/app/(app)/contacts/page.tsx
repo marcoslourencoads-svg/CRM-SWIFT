@@ -97,8 +97,13 @@ function ContactsTab() {
       if (search) params.set('search', search);
       const res = await api.get(`/contacts?${params}`);
       setList(res.data.data ?? []);
-    } catch {
-      toast.error('Erro ao carregar contatos');
+    } catch (err: any) {
+      if (err?.response?.status >= 500) {
+        toast.error('Erro ao carregar contatos');
+      } else {
+        console.warn('[/contacts] falha não-fatal:', err?.message);
+        setList([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -307,8 +312,13 @@ function CompaniesTab() {
       if (search) params.set('search', search);
       const res = await api.get(`/companies?${params}`);
       setList(res.data.data ?? []);
-    } catch {
-      toast.error('Erro ao carregar empresas');
+    } catch (err: any) {
+      if (err?.response?.status >= 500) {
+        toast.error('Erro ao carregar empresas');
+      } else {
+        console.warn('[/companies] falha não-fatal:', err?.message);
+        setList([]);
+      }
     } finally {
       setLoading(false);
     }

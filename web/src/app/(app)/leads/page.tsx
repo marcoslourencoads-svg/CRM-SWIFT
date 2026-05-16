@@ -78,8 +78,13 @@ export default function AllLeadsPage() {
         list = list.filter((l) => !l.status.isFinal);
       }
       setLeads(list);
-    } catch {
-      toast.error('Erro ao carregar leads');
+    } catch (err: any) {
+      if (err?.response?.status >= 500) {
+        toast.error('Erro ao carregar leads');
+      } else {
+        console.warn('[/leads] falha não-fatal:', err?.message);
+        setLeads([]);
+      }
     } finally {
       setLoading(false);
     }

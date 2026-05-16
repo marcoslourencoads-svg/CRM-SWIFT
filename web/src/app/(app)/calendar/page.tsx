@@ -136,54 +136,63 @@ export default function CalendarPage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        params.set('from', range.start.toISOString());
-        params.set('to', range.end.toISOString());
-        if (filterAssignee !== 'all') params.set('assigneeId', filterAssignee);
-        if (filterPipeline !== 'all') params.set('pipelineId', filterPipeline);
-        if (filterStatus !== 'all') params.set('status', filterStatus);
+      const params = new URLSearchParams();
+      params.set('from', range.start.toISOString());
+      params.set('to', range.end.toISOString());
+      if (filterAssignee !== 'all') params.set('assigneeId', filterAssignee);
+      if (filterPipeline !== 'all') params.set('pipelineId', filterPipeline);
+      if (filterStatus !== 'all') params.set('status', filterStatus);
 
-        const tasksRes = await api.get(`/tasks?${params}`);
-        setTasks(tasksRes.data.data ?? []);
+      const tasksPromise = api.get(`/tasks?${params}`).then((r) => r.data.data ?? []);
+      const pipelinesPromise = api.get('/pipelines').then((r) => r.data.data ?? []);
 
-        const pipelinesRes = await api.get('/pipelines');
-        const allPipelines: { id: string; name: string }[] = pipelinesRes.data.data ?? [];
-        const relevantPipelines =
-          filterPipeline === 'all'
-            ? allPipelines
-            : allPipelines.filter((p) => p.id === filterPipeline);
+      const [tasksRes, pipelinesRes] = await Promise.allSettled([tasksPromise, pipelinesPromise]);
 
-        const leadsByPipeline = await Promise.all(
-          relevantPipelines.map((p) =>
-            api
-              .get(`/pipelines/${p.id}/leads`)
-              .then((r) => {
-                const raw = r.data.data ?? [];
-                return raw.map((l: LeadEvent & { pipelineId?: string }) => ({
-                  ...l,
-                  pipelineId: p.id,
-                }));
-              })
-              .catch(() => []),
+      const tasksData = tasksRes.status === 'fulfilled' ? tasksRes.value : [];
+      const allPipelines: { id: string; name: string }[] =
+        pipelinesRes.status === 'fulfilled' ? pipelinesRes.value : [];
+
+      setTasks(tasksData);
+
+      const relevantPipelines =
+        filterPipeline === 'all'
+          ? allPipelines
+          : allPipelines.filter((p) => p.id === filterPipeline);
+
+      const leadsByPipeline = await Promise.allSettled(
+        relevantPipelines.map((p) =>
+          api.get(`/pipelines/${p.id}/leads`).then((r) =>
+            (r.data.data ?? []).map((l: LeadEvent & { pipelineId?: string }) => ({
+              ...l,
+              pipelineId: p.id,
+            })),
           ),
-        );
+        ),
+      );
 
-        const allLeads = leadsByPipeline.flat();
-        setLeads(
-          allLeads.filter(
-            (l: LeadEvent) =>
-              l.expectedCloseDate &&
-              new Date(l.expectedCloseDate) >= range.start &&
-              new Date(l.expectedCloseDate) <= range.end,
-          ),
-        );
-        setLeadOptions(allLeads.map((l: LeadEvent) => ({ id: l.id, title: l.title })));
-      } catch {
-        toast.error('Erro ao carregar calendário');
-      } finally {
-        setLoading(false);
+      const allLeads = leadsByPipeline
+        .filter((r): r is PromiseFulfilledResult<LeadEvent[]> => r.status === 'fulfilled')
+        .flatMap((r) => r.value);
+
+      setLeads(
+        allLeads.filter(
+          (l: LeadEvent) =>
+            l.expectedCloseDate &&
+            new Date(l.expectedCloseDate) >= range.start &&
+            new Date(l.expectedCloseDate) <= range.end,
+        ),
+      );
+      setLeadOptions(allLeads.map((l: LeadEvent) => ({ id: l.id, title: l.title })));
+
+      // Só logamos os erros — toast falso não aparece mais
+      if (tasksRes.status === 'rejected') {
+        console.warn('[calendar] tasks falhou:', tasksRes.reason?.message);
       }
+      if (pipelinesRes.status === 'rejected') {
+        console.warn('[calendar] pipelines falhou:', pipelinesRes.reason?.message);
+      }
+
+      setLoading(false);
     };
     load();
   }, [range.start, range.end, filterAssignee, filterPipeline, filterStatus]);
@@ -303,7 +312,13 @@ export default function CalendarPage() {
       <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
         <Filter className="size-3.5 text-muted-foreground" />
         <Select value={filterAssignee} onValueChange={(v) => setFilterAssignee(v ?? 'all')}>
-          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-44 text-xs">
+            <SelectValue>
+              {filterAssignee === 'all'
+                ? 'Todos os responsáveis'
+                : members.find((m) => m.id === filterAssignee)?.name ?? 'Responsável'}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os responsáveis</SelectItem>
             {members.map((m) => (
@@ -312,7 +327,13 @@ export default function CalendarPage() {
           </SelectContent>
         </Select>
         <Select value={filterPipeline} onValueChange={(v) => setFilterPipeline(v ?? 'all')}>
-          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Pipeline" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-44 text-xs">
+            <SelectValue>
+              {filterPipeline === 'all'
+                ? 'Todos os pipelines'
+                : pipelinesList.find((p) => p.id === filterPipeline)?.name ?? 'Pipeline'}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os pipelines</SelectItem>
             {pipelinesList.map((p) => (
@@ -321,7 +342,17 @@ export default function CalendarPage() {
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={(v) => setFilterStatus((v ?? 'all') as StatusFilter)}>
-          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-44 text-xs">
+            <SelectValue>
+              {filterStatus === 'all'
+                ? 'Todos os status'
+                : filterStatus === 'pending'
+                  ? 'Pendente'
+                  : filterStatus === 'overdue'
+                    ? 'Atrasada'
+                    : 'Concluída'}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os status</SelectItem>
             <SelectItem value="pending">Pendente</SelectItem>
