@@ -296,7 +296,11 @@ export default function DashboardPage() {
             onValueChange={(v) => setSelectedPipeline(v as string)}
           >
             <SelectTrigger className="w-48">
-              <SelectValue />
+              <SelectValue>
+                {selectedPipeline === '__all__'
+                  ? 'Todos os pipelines'
+                  : pipelines.find((p) => p.id === selectedPipeline)?.name ?? 'Pipeline'}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todos os pipelines</SelectItem>
@@ -314,7 +318,7 @@ export default function DashboardPage() {
             onValueChange={(v) => setPeriod(v as Period)}
           >
             <SelectTrigger className="w-36">
-              <SelectValue />
+              <SelectValue>{PERIOD_LABELS[period]}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {(Object.keys(PERIOD_LABELS) as Period[]).map((key) => (

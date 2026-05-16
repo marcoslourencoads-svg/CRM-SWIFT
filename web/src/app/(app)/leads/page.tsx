@@ -188,7 +188,13 @@ export default function AllLeadsPage() {
         <Filter className="size-3.5 text-muted-foreground" />
 
         <Select value={filterPipeline} onValueChange={(v) => setFilterPipeline(v ?? 'all')}>
-          <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-8 w-40 text-xs">
+            <SelectValue>
+              {filterPipeline === 'all'
+                ? 'Todos pipelines'
+                : pipelines.find((p) => p.id === filterPipeline)?.name ?? 'Pipeline'}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos pipelines</SelectItem>
             {pipelines.map((p) => (
@@ -198,7 +204,13 @@ export default function AllLeadsPage() {
         </Select>
 
         <Select value={filterAssignee} onValueChange={(v) => setFilterAssignee(v ?? 'all')}>
-          <SelectTrigger className="h-8 w-40 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-8 w-40 text-xs">
+            <SelectValue>
+              {filterAssignee === 'all'
+                ? 'Todos responsáveis'
+                : members.find((m) => m.id === filterAssignee)?.name ?? 'Responsável'}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos responsáveis</SelectItem>
             {members.map((m) => (
@@ -208,7 +220,17 @@ export default function AllLeadsPage() {
         </Select>
 
         <Select value={filterTemp} onValueChange={(v) => setFilterTemp(v ?? 'all')}>
-          <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-8 w-32 text-xs">
+            <SelectValue>
+              {filterTemp === 'all'
+                ? 'Temperatura'
+                : filterTemp === 'HOT'
+                  ? 'Hot'
+                  : filterTemp === 'WARM'
+                    ? 'Warm'
+                    : 'Cold'}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Temperatura</SelectItem>
             <SelectItem value="HOT">Hot</SelectItem>
@@ -221,7 +243,17 @@ export default function AllLeadsPage() {
           value={filterStatus}
           onValueChange={(v) => setFilterStatus((v ?? 'all') as typeof filterStatus)}
         >
-          <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-8 w-32 text-xs">
+            <SelectValue>
+              {filterStatus === 'all'
+                ? 'Todos status'
+                : filterStatus === 'open'
+                  ? 'Em aberto'
+                  : filterStatus === 'won'
+                    ? 'Ganhos'
+                    : 'Perdidos'}
+            </SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
             <SelectItem value="open">Em aberto</SelectItem>
