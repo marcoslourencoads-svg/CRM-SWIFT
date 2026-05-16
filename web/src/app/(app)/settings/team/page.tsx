@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { UserPlus, Copy, Loader2 } from 'lucide-react';
+import { UserPlus, Loader2 } from 'lucide-react';
+import { useAuthStore } from '@/stores/auth.store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,6 +43,7 @@ interface Invitation {
 }
 
 export default function TeamPage() {
+  const { organization } = useAuthStore();
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,26 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('MEMBER');
   const [inviting, setInviting] = useState(false);
+  const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
+
+  const myRole = organization?.role ?? 'MEMBER';
+  const canChangeRoles = myRole === 'OWNER' || myRole === 'ADMIN';
+
+  async function handleChangeRole(membership: Member, newRole: string) {
+    if (newRole === membership.role) return;
+    setSavingRoleFor(membership.id);
+    try {
+      await api.patch(`/members/${membership.id}/role`, { role: newRole });
+      setMembers((prev) =>
+        prev.map((m) => (m.id === membership.id ? { ...m, role: newRole } : m)),
+      );
+      toast.success(`Função atualizada para ${newRole}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Erro ao alterar função');
+    } finally {
+      setSavingRoleFor(null);
+    }
+  }
 
   const fetchData = async () => {
     setLoading(true);
@@ -185,9 +207,26 @@ export default function TeamPage() {
                     </td>
                     <td className="px-4 py-2 text-muted-foreground">{m.email}</td>
                     <td className="px-4 py-2">
-                      <Badge variant="secondary" className={`text-xs ${roleColors[m.role] || ''}`}>
-                        {m.role}
-                      </Badge>
+                      {m.role === 'OWNER' || !canChangeRoles ? (
+                        <Badge variant="secondary" className={`text-xs ${roleColors[m.role] || ''}`}>
+                          {m.role}
+                        </Badge>
+                      ) : (
+                        <Select
+                          value={m.role}
+                          onValueChange={(v) => v && handleChangeRole(m, v)}
+                          disabled={savingRoleFor === m.id}
+                        >
+                          <SelectTrigger className="h-7 w-32 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ADMIN">Admin</SelectItem>
+                            <SelectItem value="MANAGER">Manager</SelectItem>
+                            <SelectItem value="MEMBER">Membro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                     </td>
                   </tr>
                 ))}
