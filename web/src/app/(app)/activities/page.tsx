@@ -21,6 +21,7 @@ import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 type TaskType = 'TASK' | 'CALL' | 'MEETING' | 'EMAIL' | 'DEADLINE' | 'LUNCH';
 type PeriodFilter = 'todo' | 'overdue' | 'today' | 'tomorrow' | 'this_week' | 'next_week';
@@ -204,9 +205,11 @@ export default function ActivitiesPage() {
       {loading ? (
         <Skeleton className="h-96 w-full" />
       ) : activities.length === 0 ? (
-        <div className="rounded-lg border bg-muted/20 p-12 text-center text-sm text-muted-foreground">
-          Sem atividades nesse filtro.
-        </div>
+        <EmptyState
+          icon={List}
+          title="Nenhuma atividade nesse filtro"
+          description="Mude o tipo ou o período pra ver outras tarefas. Crie atividades no drawer do lead."
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card">
           <table className="w-full text-sm">

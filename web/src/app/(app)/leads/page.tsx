@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Select,
   SelectContent,
@@ -251,9 +252,15 @@ export default function AllLeadsPage() {
       {loading ? (
         <Skeleton className="h-96 w-full" />
       ) : leads.length === 0 ? (
-        <div className="rounded-lg border bg-muted/20 p-12 text-center text-sm text-muted-foreground">
-          Nenhum lead encontrado com esses filtros.
-        </div>
+        <EmptyState
+          icon={Layers}
+          title={hasActiveFilter ? 'Nenhum lead com esses filtros' : 'Ainda nenhum lead cadastrado'}
+          description={
+            hasActiveFilter
+              ? 'Ajuste os filtros ou limpe pra ver todos os leads.'
+              : 'Cadastre o primeiro lead num pipeline ou importe via CSV.'
+          }
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card">
           <div className="overflow-x-auto">

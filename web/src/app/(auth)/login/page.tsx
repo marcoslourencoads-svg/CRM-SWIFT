@@ -7,11 +7,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -37,7 +36,7 @@ export default function LoginPage() {
     try {
       const { data } = await api.post('/auth/login', values);
       setAuth(data.data);
-      toast.success('Login realizado com sucesso');
+      toast.success('Login realizado');
       router.push('/dashboard');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Erro ao fazer login');
@@ -47,54 +46,71 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Entrar no CRM</CardTitle>
-          <CardDescription>Faça login para acessar seu pipeline</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="seu@email.com"
-                {...form.register('email')}
-              />
-              {form.formState.errors.email && (
-                <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
-              )}
-            </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Bem-vindo de volta</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Entra com sua conta pra continuar onde parou.
+        </p>
+      </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••"
-                {...form.register('password')}
-              />
-              {form.formState.errors.password && (
-                <p className="text-sm text-destructive">{form.formState.errors.password.message}</p>
-              )}
-            </div>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="seu@email.com"
+            autoComplete="email"
+            {...form.register('email')}
+          />
+          {form.formState.errors.email && (
+            <p className="text-xs text-destructive">{form.formState.errors.email.message}</p>
+          )}
+        </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Entrar
-            </Button>
-          </form>
-
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Não tem conta?{' '}
-            <Link href="/register" className="text-primary underline-offset-4 hover:underline">
-              Criar conta
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Senha</Label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Esqueceu?
             </Link>
-          </p>
-        </CardContent>
-      </Card>
+          </div>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••"
+            autoComplete="current-password"
+            {...form.register('password')}
+          />
+          {form.formState.errors.password && (
+            <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
+          )}
+        </div>
+
+        <Button
+          type="submit"
+          className="w-full bg-emerald-600 hover:bg-emerald-700"
+          disabled={loading}
+        >
+          {loading ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <ArrowRight className="ml-1 size-4 order-last" />
+          )}
+          Entrar
+        </Button>
+      </form>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Ainda não tem conta?{' '}
+        <Link href="/register" className="font-medium text-emerald-700 hover:underline">
+          Criar gratuitamente
+        </Link>
+      </p>
     </div>
   );
 }

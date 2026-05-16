@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Dialog,
   DialogContent,
@@ -190,9 +191,16 @@ function ContactsTab() {
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : list.length === 0 ? (
-        <div className="rounded-lg border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-          Sem contatos. Crie o primeiro com o botão acima.
-        </div>
+        <EmptyState
+          icon={UserIcon}
+          title="Sem contatos ainda"
+          description="Cadastre seus primeiros contatos manualmente, ou eles aparecem aqui quando você criar leads vinculados."
+          action={
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1 size-3" /> Novo contato
+            </Button>
+          }
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card">
           <table className="w-full text-sm">
@@ -400,9 +408,16 @@ function CompaniesTab() {
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : list.length === 0 ? (
-        <div className="rounded-lg border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-          Sem empresas cadastradas.
-        </div>
+        <EmptyState
+          icon={Building2}
+          title="Sem empresas cadastradas"
+          description="Agrupe contatos sob uma empresa pra ter visão consolidada."
+          action={
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1 size-3" /> Nova empresa
+            </Button>
+          }
+        />
       ) : (
         <div className="overflow-hidden rounded-lg border bg-card">
           <table className="w-full text-sm">

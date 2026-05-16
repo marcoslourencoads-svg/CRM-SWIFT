@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Download, Filter } from 'lucide-react';
+import { Download, Filter, ScrollText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import api from '@/lib/api';
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
 
 const TYPE_LABELS: Record<string, string> = {
   CREATED: 'Lead criado',
@@ -109,18 +111,18 @@ export default function AuditPage() {
   };
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Audit log</h2>
-        <Button size="sm" variant="outline" onClick={exportCsv} disabled={items.length === 0}>
-          <Download className="mr-1 size-3" />
-          Exportar CSV
-        </Button>
-      </div>
-
-      <p className="mb-3 text-xs text-muted-foreground">
-        Histórico de tudo que aconteceu na sua organização. Útil pra auditoria e descobrir quem fez o quê.
-      </p>
+    <div className="space-y-4">
+      <PageHeader
+        icon={ScrollText}
+        title="Histórico"
+        description="Tudo que aconteceu na sua organização. Útil pra auditoria e descobrir quem fez o quê."
+        actions={
+          <Button size="sm" variant="outline" onClick={exportCsv} disabled={items.length === 0}>
+            <Download className="mr-1 size-3" />
+            Exportar CSV
+          </Button>
+        }
+      />
 
       <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
         <div className="space-y-1">
@@ -160,10 +162,11 @@ export default function AuditPage() {
       {loading ? (
         <Skeleton className="h-64 w-full" />
       ) : items.length === 0 ? (
-        <div className="rounded-lg border bg-muted/20 p-12 text-center text-sm text-muted-foreground">
-          <Filter className="mx-auto mb-2 size-5" />
-          Nenhuma atividade no período selecionado.
-        </div>
+        <EmptyState
+          icon={Filter}
+          title="Nenhuma atividade no período"
+          description="Ajuste os filtros ou aguarde — eventos aparecem aqui assim que alguém criar, mover ou editar um lead."
+        />
       ) : (
         <div className="rounded-lg border">
           <table className="w-full text-sm">
