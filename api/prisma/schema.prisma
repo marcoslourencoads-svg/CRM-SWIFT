@@ -40,6 +40,7 @@ model Organization {
   savedViews        SavedView[]
   channels          Channel[]
   conversations     Conversation[]
+  teamChannels      TeamChannel[]
 
   @@index([deletedAt])
   @@map("organizations")
@@ -137,6 +138,59 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@map("messages")
+}
+
+// ─── Team Chat (chat interno) ───────────────────────────────
+
+enum TeamChannelType {
+  PUBLIC
+  PRIVATE
+  DIRECT
+}
+
+model TeamChannel {
+  id             String          @id @default(cuid())
+  organizationId String          @map("organization_id")
+  name           String
+  type           TeamChannelType @default(PUBLIC)
+  description    String?
+  createdBy      String          @map("created_by")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      TeamChannelMember[]
+  messages     TeamMessage[]
+
+  @@index([organizationId])
+  @@map("team_channels")
+}
+
+model TeamChannelMember {
+  channelId  String    @map("channel_id")
+  userId     String    @map("user_id")
+  joinedAt   DateTime  @default(now()) @map("joined_at")
+  lastReadAt DateTime? @map("last_read_at")
+
+  channel TeamChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, userId])
+  @@index([userId])
+  @@map("team_channel_members")
+}
+
+model TeamMessage {
+  id        String   @id @default(cuid())
+  channelId String   @map("channel_id")
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  channel TeamChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+  @@map("team_messages")
 }
 
 model PipelineMembership {

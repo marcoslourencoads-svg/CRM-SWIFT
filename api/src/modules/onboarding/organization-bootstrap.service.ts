@@ -28,7 +28,11 @@ export class OrganizationBootstrapService {
    * Roda o bootstrap completo. Cada bloco é idempotente.
    * Pode ser chamado dentro de uma transaction (passa o tx) ou sem.
    */
-  async bootstrap(orgId: string, tx: Prisma.TransactionClient = this.prisma as never) {
+  async bootstrap(
+    orgId: string,
+    tx: Prisma.TransactionClient = this.prisma as never,
+    ownerId?: string,
+  ) {
     this.logger.log(`Bootstrapping org ${orgId}`);
 
     const pipeline = await this.ensurePipeline(orgId, tx);
@@ -39,6 +43,9 @@ export class OrganizationBootstrapService {
     await this.ensureLostReasons(orgId, tx);
     await this.ensureWhatsappTemplates(orgId, tx);
     await this.ensureDefaultChannel(orgId, tx);
+    if (ownerId) {
+      await this.ensureTeamChatGeneral(orgId, ownerId, tx);
+    }
 
     this.logger.log(`Bootstrap completo pra org ${orgId}`);
     return { pipelineId: pipeline.id };
@@ -234,6 +241,30 @@ export class OrganizationBootstrapService {
         provider: 'MANUAL',
         name: 'WhatsApp (manual)',
         isActive: true,
+      },
+    });
+  }
+
+  // ---------- Team chat #geral ----------
+
+  private async ensureTeamChatGeneral(
+    orgId: string,
+    ownerId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const existing = await tx.teamChannel.findFirst({
+      where: { organizationId: orgId, name: 'geral', type: 'PUBLIC' },
+    });
+    if (existing) return;
+
+    await tx.teamChannel.create({
+      data: {
+        organizationId: orgId,
+        name: 'geral',
+        type: 'PUBLIC',
+        description: 'Canal geral do time',
+        createdBy: ownerId,
+        members: { create: [{ userId: ownerId }] },
       },
     });
   }

@@ -75,8 +75,8 @@ export class AuthService {
       });
 
       // Onboarding zero-config: popula pipeline, tags, sources, templates,
-      // motivos de perda e canal manual. Idempotente.
-      await this.bootstrap.bootstrap(org.id, tx);
+      // motivos de perda, canal manual e canal #geral do team chat.
+      await this.bootstrap.bootstrap(org.id, tx, user.id);
 
       return { user, org };
     });

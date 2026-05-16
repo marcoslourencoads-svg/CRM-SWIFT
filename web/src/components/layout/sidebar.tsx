@@ -15,6 +15,8 @@ import {
   Inbox,
   Layers,
   Contact,
+  MessageSquare,
+  MessagesSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -31,7 +33,6 @@ interface Pipeline {
 
 const staticNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/leads', label: 'Todos os leads', icon: Layers },
   { href: '/contacts', label: 'Contatos', icon: Contact },
   { href: '/calendar', label: 'Calendário', icon: Calendar },
@@ -40,12 +41,18 @@ const staticNavItems = [
   { href: '/settings/organization', label: 'Configurações', icon: Settings },
 ];
 
+const communicationsItems = [
+  { href: '/inbox', label: 'WhatsApp / Inbox', icon: MessageSquare },
+  { href: '/team-chat', label: 'Chat do Time', icon: MessagesSquare },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [pipelinesOpen, setPipelinesOpen] = useState(true);
+  const [commsOpen, setCommsOpen] = useState(true);
 
   useEffect(() => {
     api
@@ -112,6 +119,42 @@ export function Sidebar() {
                 )}
               >
                 {pipeline.name}
+              </Link>
+            );
+          })}
+
+        <Separator className="my-2" />
+
+        {/* Comunicações section */}
+        <button
+          onClick={() => setCommsOpen((v) => !v)}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground transition-colors"
+        >
+          <Inbox className="h-4 w-4" />
+          <span className="flex-1 text-left">Comunicações</span>
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 transition-transform',
+              commsOpen && 'rotate-180',
+            )}
+          />
+        </button>
+        {commsOpen &&
+          communicationsItems.map((item) => {
+            const isActive = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 rounded-md py-1.5 pl-10 pr-3 text-sm transition-colors',
+                  isActive
+                    ? 'bg-accent text-accent-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
+                )}
+              >
+                <item.icon className="h-3.5 w-3.5" />
+                {item.label}
               </Link>
             );
           })}
