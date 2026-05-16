@@ -30,6 +30,7 @@ interface WhatsappTemplate {
 interface WhatsappDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  leadId?: string;
   leadName: string;
   leadPhone?: string | null;
   companyName?: string | null;
@@ -49,6 +50,7 @@ function sanitizePhone(phone: string) {
 export function WhatsappDialog({
   open,
   onOpenChange,
+  leadId,
   leadName,
   leadPhone,
   companyName,
@@ -80,12 +82,26 @@ export function WhatsappDialog({
     );
   }, [selectedId, templates, leadName, leadPhone, companyName]);
 
-  const send = () => {
+  const send = async () => {
     const phone = leadPhone ? sanitizePhone(leadPhone) : '';
     const text = encodeURIComponent(preview);
     const url = phone
       ? `https://wa.me/${phone}?text=${text}`
       : `https://wa.me/?text=${text}`;
+
+    // Registra a mensagem na inbox antes de abrir o WhatsApp Web.
+    // Não bloqueia se falhar — abre o WA mesmo assim.
+    try {
+      await api.post('/inbox/messages', {
+        body: preview,
+        leadId,
+        contactPhone: leadPhone ?? undefined,
+        contactName: leadName,
+      });
+    } catch {
+      // silent
+    }
+
     window.open(url, '_blank');
     onOpenChange(false);
   };

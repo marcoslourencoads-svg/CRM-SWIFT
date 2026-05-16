@@ -47,6 +47,7 @@ import { MarkLostDialog } from './lead-actions/mark-lost-dialog';
 import { MarkWonDialog } from './lead-actions/mark-won-dialog';
 import { DeleteLeadDialog } from './lead-actions/delete-lead-dialog';
 import { WhatsappDialog } from './lead-actions/whatsapp-dialog';
+import { LeadMessagesTab } from './lead-messages-tab';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -665,6 +666,7 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
             <WhatsappDialog
               open={showWhatsappDialog}
               onOpenChange={setShowWhatsappDialog}
+              leadId={lead.id}
               leadName={lead.contact?.name ?? lead.title}
               leadPhone={lead.contact?.phone ?? null}
               companyName={lead.company?.name ?? null}
@@ -787,6 +789,7 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                     </span>
                   )}
                 </TabsTrigger>
+                <TabsTrigger value="messages">Mensagens</TabsTrigger>
                 <TabsTrigger value="timeline">Timeline</TabsTrigger>
               </TabsList>
 
@@ -1130,6 +1133,11 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                     })}
                   </div>
                 )}
+              </TabsContent>
+
+              {/* -- Messages Tab -- */}
+              <TabsContent value="messages" className="pt-4">
+                <LeadMessagesTab leadId={lead.id} />
               </TabsContent>
 
               {/* -- Timeline Tab -- */}

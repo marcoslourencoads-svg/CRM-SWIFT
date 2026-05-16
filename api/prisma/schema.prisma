@@ -38,9 +38,105 @@ model Organization {
   lostReasons       LostReason[]
   whatsappTemplates WhatsappTemplate[]
   savedViews        SavedView[]
+  channels          Channel[]
+  conversations     Conversation[]
 
   @@index([deletedAt])
   @@map("organizations")
+}
+
+// ─── Inbox (Conversations / Messages / Channels) ────────────
+
+enum ChannelType {
+  WHATSAPP
+  INSTAGRAM
+  EMAIL
+}
+
+enum ChannelProvider {
+  MANUAL
+  EVOLUTION
+  ZAPI
+  META_CLOUD
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model Channel {
+  id             String          @id @default(cuid())
+  organizationId String          @map("organization_id")
+  type           ChannelType
+  provider       ChannelProvider @default(MANUAL)
+  name           String
+  config         Json            @default("{}")
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@index([organizationId, isActive])
+  @@map("channels")
+}
+
+model Conversation {
+  id             String             @id @default(cuid())
+  organizationId String             @map("organization_id")
+  channelId      String             @map("channel_id")
+  leadId         String?            @map("lead_id")
+  contactPhone   String?            @map("contact_phone")
+  contactName    String?            @map("contact_name")
+  status         ConversationStatus @default(OPEN)
+  lastMessageAt  DateTime?          @map("last_message_at")
+  unreadCount    Int                @default(0) @map("unread_count")
+  assignedTo     String?            @map("assigned_to")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@index([organizationId, status, lastMessageAt])
+  @@index([leadId])
+  @@index([assignedTo])
+  @@map("conversations")
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String           @map("conversation_id")
+  direction      MessageDirection
+  body           String
+  mediaUrl       String?          @map("media_url")
+  mediaType      String?          @map("media_type")
+  status         MessageStatus    @default(SENT)
+  externalId     String?          @map("external_id")
+  sentAt         DateTime?        @map("sent_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
 }
 
 model PipelineMembership {
