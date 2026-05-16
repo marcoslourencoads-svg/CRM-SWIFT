@@ -29,6 +29,7 @@ import { LostReasonsModule } from './modules/lost-reasons/lost-reasons.module';
 import { WhatsappTemplatesModule } from './modules/whatsapp-templates/whatsapp-templates.module';
 import { SavedViewsModule } from './modules/saved-views/saved-views.module';
 import { InboxModule } from './modules/inbox/inbox.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { validateEnv } from './common/config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { OrgMemberGuard } from './common/guards/org-member.guard';
@@ -69,6 +70,7 @@ import { HealthController } from './health.controller';
     WhatsappTemplatesModule,
     SavedViewsModule,
     InboxModule,
+    OnboardingModule,
   ],
   controllers: [HealthController],
   providers: [

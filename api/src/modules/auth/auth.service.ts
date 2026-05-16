@@ -13,6 +13,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { OrganizationBootstrapService } from '../onboarding/organization-bootstrap.service';
 
 interface TokenPayload {
   sub: string;
@@ -35,6 +36,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly bootstrap: OrganizationBootstrapService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -71,6 +73,10 @@ export class AuthService {
           role: 'OWNER',
         },
       });
+
+      // Onboarding zero-config: popula pipeline, tags, sources, templates,
+      // motivos de perda e canal manual. Idempotente.
+      await this.bootstrap.bootstrap(org.id, tx);
 
       return { user, org };
     });
