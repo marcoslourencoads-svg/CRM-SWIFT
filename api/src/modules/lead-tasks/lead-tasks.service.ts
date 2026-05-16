@@ -45,6 +45,50 @@ export class LeadTasksService {
     });
   }
 
+  /**
+   * Lista tasks da org com filtros opcionais.
+   * Usado pelo calendário pra filtrar por responsável / pipeline / status.
+   */
+  async findForOrg(
+    orgId: string,
+    filters: {
+      assigneeId?: string;
+      pipelineId?: string;
+      status?: 'pending' | 'completed' | 'overdue';
+      from?: Date;
+      to?: Date;
+    } = {},
+  ) {
+    const now = new Date();
+    const where: any = {
+      lead: { organizationId: orgId },
+    };
+
+    if (filters.assigneeId) where.assigneeId = filters.assigneeId;
+    if (filters.pipelineId) where.lead = { ...where.lead, pipelineId: filters.pipelineId };
+
+    if (filters.status === 'pending') where.completedAt = null;
+    else if (filters.status === 'completed') where.completedAt = { not: null };
+    else if (filters.status === 'overdue') {
+      where.completedAt = null;
+      where.dueDate = { lt: now };
+    }
+
+    if (filters.from || filters.to) {
+      where.dueDate = {
+        ...(where.dueDate ?? {}),
+        ...(filters.from ? { gte: filters.from } : {}),
+        ...(filters.to ? { lte: filters.to } : {}),
+      };
+    }
+
+    return this.prisma.leadTask.findMany({
+      where,
+      orderBy: { dueDate: 'asc' },
+      include: this.taskInclude,
+    });
+  }
+
   async create(leadId: string, userId: string, dto: CreateLeadTaskDto) {
     return this.prisma.leadTask.create({
       data: {

@@ -67,6 +67,38 @@ export class LeadsController {
     );
   }
 
+  @Get('leads')
+  findAll(
+    @CurrentOrg() orgId: string,
+    @Query('search') search?: string,
+    @Query('pipelineId') pipelineId?: string,
+    @Query('statusId') statusId?: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('temperature') temperature?: string,
+    @Query('tagIds') tagIds?: string,
+    @Query('isWon') isWon?: string,
+    @Query('isLost') isLost?: string,
+    @Query('createdAfter') createdAfter?: string,
+    @Query('createdBefore') createdBefore?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.service.findAllForOrg(orgId, {
+      search,
+      pipelineId,
+      statusId,
+      assigneeId,
+      temperature,
+      tagIds: tagIds ? tagIds.split(',').filter(Boolean) : undefined,
+      isWon: isWon === 'true' ? true : undefined,
+      isLost: isLost === 'true' ? true : undefined,
+      createdAfter,
+      createdBefore,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      cursor,
+    });
+  }
+
   @Get('leads/:id')
   findOne(@CurrentOrg() orgId: string, @Param('id') id: string) {
     return this.service.findOne(orgId, id);

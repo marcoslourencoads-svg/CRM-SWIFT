@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Target, CheckCircle2, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Target, CheckCircle2, X, Filter } from 'lucide-react';
 import {
   format,
   startOfMonth,
@@ -67,6 +67,18 @@ interface LeadOption {
   title: string;
 }
 
+interface MemberOption {
+  id: string;
+  name: string;
+}
+
+interface PipelineOption {
+  id: string;
+  name: string;
+}
+
+type StatusFilter = 'all' | 'pending' | 'completed' | 'overdue';
+
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 07h-21h
 
@@ -85,6 +97,11 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
 
   const [leadOptions, setLeadOptions] = useState<LeadOption[]>([]);
+  const [members, setMembers] = useState<MemberOption[]>([]);
+  const [pipelinesList, setPipelinesList] = useState<PipelineOption[]>([]);
+  const [filterAssignee, setFilterAssignee] = useState<string>('all');
+  const [filterPipeline, setFilterPipeline] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftDate, setDraftDate] = useState<Date | null>(null);
   const [draftLeadId, setDraftLeadId] = useState('');
@@ -109,25 +126,36 @@ export default function CalendarPage() {
     };
   }, [view, refDate]);
 
+  // Carrega membros + pipelines (1x)
+  useEffect(() => {
+    api.get('/members').then((r) => setMembers(r.data.data ?? [])).catch(() => {});
+    api.get('/pipelines').then((r) => setPipelinesList(r.data.data ?? [])).catch(() => {});
+  }, []);
+
   // Load events + leads pra dropdown
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const tasksRes = await api.get('/tasks/mine');
-        const tasksInRange: TaskEvent[] = (tasksRes.data.data ?? []).filter(
-          (t: TaskEvent) =>
-            t.dueDate &&
-            new Date(t.dueDate) >= range.start &&
-            new Date(t.dueDate) <= range.end,
-        );
-        setTasks(tasksInRange);
+        const params = new URLSearchParams();
+        params.set('from', range.start.toISOString());
+        params.set('to', range.end.toISOString());
+        if (filterAssignee !== 'all') params.set('assigneeId', filterAssignee);
+        if (filterPipeline !== 'all') params.set('pipelineId', filterPipeline);
+        if (filterStatus !== 'all') params.set('status', filterStatus);
+
+        const tasksRes = await api.get(`/tasks?${params}`);
+        setTasks(tasksRes.data.data ?? []);
 
         const pipelinesRes = await api.get('/pipelines');
         const allPipelines: { id: string; name: string }[] = pipelinesRes.data.data ?? [];
+        const relevantPipelines =
+          filterPipeline === 'all'
+            ? allPipelines
+            : allPipelines.filter((p) => p.id === filterPipeline);
 
         const leadsByPipeline = await Promise.all(
-          allPipelines.map((p) =>
+          relevantPipelines.map((p) =>
             api
               .get(`/pipelines/${p.id}/leads`)
               .then((r) => {
@@ -158,7 +186,7 @@ export default function CalendarPage() {
       }
     };
     load();
-  }, [range.start, range.end]);
+  }, [range.start, range.end, filterAssignee, filterPipeline, filterStatus]);
 
   // Navigation
   const goPrev = () => {
@@ -269,6 +297,52 @@ export default function CalendarPage() {
 
           <Button size="sm" onClick={() => openCreate(new Date())}>+ Novo evento</Button>
         </div>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2">
+        <Filter className="size-3.5 text-muted-foreground" />
+        <Select value={filterAssignee} onValueChange={(v) => setFilterAssignee(v ?? 'all')}>
+          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os responsáveis</SelectItem>
+            {members.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterPipeline} onValueChange={(v) => setFilterPipeline(v ?? 'all')}>
+          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Pipeline" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os pipelines</SelectItem>
+            {pipelinesList.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={(v) => setFilterStatus((v ?? 'all') as StatusFilter)}>
+          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os status</SelectItem>
+            <SelectItem value="pending">Pendente</SelectItem>
+            <SelectItem value="overdue">Atrasada</SelectItem>
+            <SelectItem value="completed">Concluída</SelectItem>
+          </SelectContent>
+        </Select>
+        {(filterAssignee !== 'all' || filterPipeline !== 'all' || filterStatus !== 'all') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            onClick={() => {
+              setFilterAssignee('all');
+              setFilterPipeline('all');
+              setFilterStatus('all');
+            }}
+          >
+            <X className="mr-1 size-3" /> Limpar filtros
+          </Button>
+        )}
       </div>
 
       {loading ? (

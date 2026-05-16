@@ -13,6 +13,8 @@ import {
   Upload,
   Calendar,
   Inbox,
+  Layers,
+  Contact,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -30,6 +32,8 @@ interface Pipeline {
 const staticNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
+  { href: '/leads', label: 'Todos os leads', icon: Layers },
+  { href: '/contacts', label: 'Contatos', icon: Contact },
   { href: '/calendar', label: 'Calendário', icon: Calendar },
   { href: '/leads/import', label: 'Importar leads', icon: Upload },
   { href: '/settings/team', label: 'Time', icon: Users },

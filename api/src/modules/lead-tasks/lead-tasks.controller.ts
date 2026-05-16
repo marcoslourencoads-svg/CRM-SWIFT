@@ -10,7 +10,7 @@ import {
 import { LeadTasksService } from './lead-tasks.service';
 import { CreateLeadTaskDto } from './dto/create-lead-task.dto';
 import { UpdateLeadTaskDto } from './dto/update-lead-task.dto';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CurrentUser, CurrentOrg } from '../../common/decorators/current-user.decorator';
 
 @Controller()
 export class LeadTasksController {
@@ -27,6 +27,24 @@ export class LeadTasksController {
     @Query('status') status?: string,
   ) {
     return this.service.findMine(userId, status);
+  }
+
+  @Get('tasks')
+  findForOrg(
+    @CurrentOrg() orgId: string,
+    @Query('assigneeId') assigneeId?: string,
+    @Query('pipelineId') pipelineId?: string,
+    @Query('status') status?: 'pending' | 'completed' | 'overdue',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.service.findForOrg(orgId, {
+      assigneeId,
+      pipelineId,
+      status,
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+    });
   }
 
   @Post('leads/:leadId/tasks')

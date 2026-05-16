@@ -224,6 +224,81 @@ export class LeadsService {
     });
   }
 
+  /**
+   * Lista flat de todos os leads da org, atravessando todos os pipelines.
+   * Usado pela tela /leads (visão "Todos os leads").
+   */
+  async findAllForOrg(
+    orgId: string,
+    filters?: {
+      search?: string;
+      pipelineId?: string;
+      statusId?: string;
+      assigneeId?: string;
+      tagIds?: string[];
+      temperature?: string;
+      isWon?: boolean;
+      isLost?: boolean;
+      createdAfter?: string | Date;
+      createdBefore?: string | Date;
+      limit?: number;
+      cursor?: string;
+    },
+  ) {
+    const where: any = {
+      organizationId: orgId,
+      deletedAt: null,
+    };
+
+    if (filters?.pipelineId) where.pipelineId = filters.pipelineId;
+    if (filters?.statusId) where.statusId = filters.statusId;
+    if (filters?.assigneeId) where.assigneeId = filters.assigneeId;
+    if (filters?.temperature) where.temperature = filters.temperature;
+
+    if (filters?.isWon === true) where.status = { isWon: true };
+    else if (filters?.isLost === true) where.status = { isFinal: true, isWon: false };
+
+    if (filters?.tagIds && filters.tagIds.length > 0) {
+      where.AND = filters.tagIds.map((tagId) => ({
+        tags: { some: { tagId } },
+      }));
+    }
+
+    if (filters?.createdAfter || filters?.createdBefore) {
+      where.createdAt = {};
+      if (filters.createdAfter) where.createdAt.gte = new Date(filters.createdAfter);
+      if (filters.createdBefore) where.createdAt.lte = new Date(filters.createdBefore);
+    }
+
+    if (filters?.search) {
+      where.OR = [
+        { title: { contains: filters.search, mode: 'insensitive' } },
+        { contact: { name: { contains: filters.search, mode: 'insensitive' } } },
+        { contact: { email: { contains: filters.search, mode: 'insensitive' } } },
+        { contact: { phone: { contains: filters.search } } },
+        { company: { name: { contains: filters.search, mode: 'insensitive' } } },
+      ];
+    }
+
+    const take = filters?.limit || 200;
+
+    return this.prisma.lead.findMany({
+      where,
+      include: {
+        status: { select: { id: true, name: true, color: true, isWon: true, isFinal: true } },
+        pipeline: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, avatarUrl: true } },
+        contact: { select: { id: true, name: true, email: true, phone: true } },
+        company: { select: { id: true, name: true } },
+        tags: { include: { tag: true } },
+        score: { select: { score: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      ...(filters?.cursor ? { skip: 1, cursor: { id: filters.cursor } } : {}),
+    });
+  }
+
   async findOne(orgId: string, id: string) {
     const lead = await this.prisma.lead.findFirst({
       where: { id, organizationId: orgId, deletedAt: null },
