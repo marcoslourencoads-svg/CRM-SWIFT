@@ -249,6 +249,202 @@ export class DashboardService {
     return { pipelineId, totalLeads, steps };
   }
 
+  // ─── Insights ──────────────────────────────────────────────
+
+  /**
+   * Performance por fonte de origem. Pra cada source da org:
+   * - leads (total criados no período)
+   * - wins (quantos viraram ganho)
+   * - revenue (soma de estimatedValue dos wins)
+   * - conversionRate (%)
+   */
+  async bySource(orgId: string, pipelineId?: string, dateFrom?: string, dateTo?: string) {
+    const dateFilter = this.buildDateFilter(dateFrom, dateTo);
+    const baseWhere: any = {
+      organizationId: orgId,
+      deletedAt: null,
+      ...(pipelineId ? { pipelineId } : {}),
+      ...dateFilter,
+    };
+
+    const sources = await this.prisma.leadSource.findMany({
+      where: { organizationId: orgId, isActive: true },
+      select: { id: true, name: true, color: true },
+    });
+
+    const result = await Promise.all(
+      sources.map(async (src) => {
+        const where = { ...baseWhere, sourceId: src.id };
+        const [leads, wonLeads] = await Promise.all([
+          this.prisma.lead.count({ where }),
+          this.prisma.lead.findMany({
+            where: { ...where, status: { isWon: true } },
+            select: { estimatedValue: true },
+          }),
+        ]);
+        const wins = wonLeads.length;
+        const revenue = wonLeads.reduce((s, l) => s + (l.estimatedValue ?? 0), 0);
+        const conversionRate = leads > 0 ? Math.round((wins / leads) * 10000) / 100 : 0;
+        return {
+          sourceId: src.id,
+          sourceName: src.name,
+          sourceColor: src.color,
+          leads,
+          wins,
+          revenue,
+          conversionRate,
+        };
+      }),
+    );
+
+    return result.sort((a, b) => b.revenue - a.revenue);
+  }
+
+  /**
+   * Forecast: soma de (estimatedValue × probability/100) dos leads em aberto
+   * (não won/lost), agrupado por status.
+   */
+  async forecast(orgId: string, pipelineId?: string) {
+    const where: any = {
+      organizationId: orgId,
+      deletedAt: null,
+      status: { isFinal: false },
+      ...(pipelineId ? { pipelineId } : {}),
+    };
+
+    const leads = await this.prisma.lead.findMany({
+      where,
+      select: {
+        estimatedValue: true,
+        probability: true,
+        status: { select: { id: true, name: true, color: true } },
+      },
+    });
+
+    const byStatusMap = new Map<string, { statusName: string; statusColor: string; forecast: number; count: number }>();
+    let totalForecast = 0;
+
+    for (const l of leads) {
+      const value = l.estimatedValue ?? 0;
+      const prob = l.probability ?? 50; // default 50% se não definido
+      const partial = value * (prob / 100);
+      totalForecast += partial;
+
+      const key = l.status.id;
+      const existing = byStatusMap.get(key);
+      if (existing) {
+        existing.forecast += partial;
+        existing.count += 1;
+      } else {
+        byStatusMap.set(key, {
+          statusName: l.status.name,
+          statusColor: l.status.color,
+          forecast: partial,
+          count: 1,
+        });
+      }
+    }
+
+    return {
+      totalForecast: Math.round(totalForecast),
+      byStatus: Array.from(byStatusMap.values())
+        .map((s) => ({ ...s, forecast: Math.round(s.forecast) }))
+        .sort((a, b) => b.forecast - a.forecast),
+    };
+  }
+
+  /**
+   * Tempo médio que cada lead passa em cada etapa (em dias).
+   * Aproximação: usa activities de tipo STATUS_CHANGED do audit pra inferir
+   * entrada/saída. Se não houver evento de saída, considera lead ainda lá.
+   */
+  async avgTimePerStage(orgId: string, pipelineId?: string) {
+    const statuses = await this.prisma.pipelineStatus.findMany({
+      where: {
+        pipeline: { organizationId: orgId },
+        ...(pipelineId ? { pipelineId } : {}),
+      },
+      orderBy: { position: 'asc' },
+      select: { id: true, name: true, color: true, position: true },
+    });
+
+    if (statuses.length === 0) return [];
+
+    // Buscar todas as atividades de mudança de status
+    const moves = await this.prisma.activity.findMany({
+      where: {
+        type: 'STATUS_CHANGED',
+        lead: {
+          organizationId: orgId,
+          deletedAt: null,
+          ...(pipelineId ? { pipelineId } : {}),
+        },
+      },
+      select: {
+        leadId: true,
+        createdAt: true,
+        metadata: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Agrupa por lead
+    const byLead = new Map<string, typeof moves>();
+    for (const m of moves) {
+      const list = byLead.get(m.leadId) ?? [];
+      list.push(m);
+      byLead.set(m.leadId, list);
+    }
+
+    // Pra cada lead, calcula intervalo de tempo entre mudanças
+    const stageTotals = new Map<string, { totalMs: number; samples: number }>();
+
+    for (const [, leadMoves] of byLead) {
+      for (let i = 0; i < leadMoves.length - 1; i++) {
+        const cur = leadMoves[i];
+        const next = leadMoves[i + 1];
+        const meta = (cur.metadata as any) ?? {};
+        const toStatusId = meta.toStatusId ?? meta.statusId;
+        if (!toStatusId) continue;
+        const elapsed = next.createdAt.getTime() - cur.createdAt.getTime();
+        const existing = stageTotals.get(toStatusId);
+        if (existing) {
+          existing.totalMs += elapsed;
+          existing.samples += 1;
+        } else {
+          stageTotals.set(toStatusId, { totalMs: elapsed, samples: 1 });
+        }
+      }
+    }
+
+    return statuses.map((s) => {
+      const t = stageTotals.get(s.id);
+      const avgDays = t && t.samples > 0
+        ? Math.round((t.totalMs / t.samples / (1000 * 60 * 60 * 24)) * 10) / 10
+        : 0;
+      return {
+        statusId: s.id,
+        statusName: s.name,
+        statusColor: s.color,
+        position: s.position,
+        avgDays,
+        samples: t?.samples ?? 0,
+      };
+    });
+  }
+
+  /**
+   * Agrega os 3 insights num único response.
+   */
+  async insights(orgId: string, pipelineId?: string, dateFrom?: string, dateTo?: string) {
+    const [bySource, forecast, avgTimePerStage] = await Promise.all([
+      this.bySource(orgId, pipelineId, dateFrom, dateTo),
+      this.forecast(orgId, pipelineId),
+      this.avgTimePerStage(orgId, pipelineId),
+    ]);
+    return { bySource, forecast, avgTimePerStage };
+  }
+
   // ─── Helpers ───────────────────────────────────────────────
 
   private buildDateFilter(dateFrom?: string, dateTo?: string) {

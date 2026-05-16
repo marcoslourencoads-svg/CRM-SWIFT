@@ -56,6 +56,35 @@ interface FunnelStep {
   conversionFromPrev: number;
 }
 
+interface SourceInsight {
+  sourceId: string;
+  sourceName: string;
+  sourceColor: string;
+  leads: number;
+  wins: number;
+  revenue: number;
+  conversionRate: number;
+}
+
+interface ForecastInsight {
+  totalForecast: number;
+  byStatus: { statusName: string; statusColor: string; forecast: number; count: number }[];
+}
+
+interface StageTimeInsight {
+  statusId: string;
+  statusName: string;
+  statusColor: string;
+  avgDays: number;
+  samples: number;
+}
+
+interface InsightsData {
+  bySource: SourceInsight[];
+  forecast: ForecastInsight;
+  avgTimePerStage: StageTimeInsight[];
+}
+
 /* ---------- period helpers ---------- */
 
 type Period = 'all' | 'today' | 'week' | 'month' | 'quarter' | 'year';
@@ -118,10 +147,12 @@ export default function DashboardPage() {
   const [kpis, setKpis] = useState<KpiData | null>(null);
   const [cpl, setCpl] = useState<CplData | null>(null);
   const [funnel, setFunnel] = useState<FunnelStep[]>([]);
+  const [insights, setInsights] = useState<InsightsData | null>(null);
 
   const [loadingKpis, setLoadingKpis] = useState(true);
   const [loadingCpl, setLoadingCpl] = useState(true);
   const [loadingFunnel, setLoadingFunnel] = useState(true);
+  const [loadingInsights, setLoadingInsights] = useState(true);
 
   // Load pipelines on mount
   useEffect(() => {
@@ -187,10 +218,30 @@ export default function DashboardPage() {
     }
   }, [selectedPipeline]);
 
+  // Fetch insights
+  const fetchInsights = useCallback(async () => {
+    if (!selectedPipeline) return;
+    setLoadingInsights(true);
+    try {
+      const { dateFrom, dateTo } = getDateRange(period);
+      const params: Record<string, string | undefined> = { dateFrom, dateTo };
+      if (selectedPipeline && selectedPipeline !== '__all__') {
+        params.pipelineId = selectedPipeline;
+      }
+      const { data } = await api.get('/dashboard/insights', { params });
+      setInsights(data.data);
+    } catch {
+      /* silent */
+    } finally {
+      setLoadingInsights(false);
+    }
+  }, [selectedPipeline, period]);
+
   useEffect(() => {
     fetchKpis();
     fetchCpl();
-  }, [fetchKpis, fetchCpl]);
+    fetchInsights();
+  }, [fetchKpis, fetchCpl, fetchInsights]);
 
   useEffect(() => {
     fetchFunnel();
@@ -385,6 +436,150 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Insights row 1: Forecast + Performance por fonte */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardContent>
+            <h2 className="mb-1 text-base font-semibold">Receita prevista (forecast)</h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Soma de (valor × probabilidade) dos leads em aberto.
+            </p>
+            {loadingInsights ? (
+              <Skeleton className="h-32 w-full" />
+            ) : insights && insights.forecast.totalForecast > 0 ? (
+              <div className="space-y-3">
+                <p className="text-3xl font-bold text-emerald-600">
+                  {formatCurrency(insights.forecast.totalForecast)}
+                </p>
+                <div className="space-y-1">
+                  {insights.forecast.byStatus.map((s) => (
+                    <div key={s.statusName} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: s.statusColor }}
+                        />
+                        <span className="truncate">{s.statusName}</span>
+                        <span className="text-muted-foreground">({s.count})</span>
+                      </div>
+                      <span className="font-medium">{formatCurrency(s.forecast)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-muted-foreground text-sm">
+                Sem leads em aberto pra calcular forecast.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <h2 className="mb-1 text-base font-semibold">Performance por fonte</h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              De onde vem o melhor retorno?
+            </p>
+            {loadingInsights ? (
+              <Skeleton className="h-32 w-full" />
+            ) : insights && insights.bySource.some((s) => s.leads > 0) ? (
+              <div className="space-y-2">
+                {insights.bySource
+                  .filter((s) => s.leads > 0)
+                  .map((s) => {
+                    const maxRevenue = Math.max(
+                      ...insights.bySource.map((x) => x.revenue),
+                      1,
+                    );
+                    const widthPct = Math.max((s.revenue / maxRevenue) * 100, 5);
+                    return (
+                      <div key={s.sourceId}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="font-medium">{s.sourceName}</span>
+                          <span className="text-muted-foreground">
+                            {s.leads} leads · {s.wins} wins · {s.conversionRate}%
+                          </span>
+                        </div>
+                        <div className="relative h-5 rounded bg-muted overflow-hidden">
+                          <div
+                            className="h-full flex items-center px-2 text-[10px] font-semibold text-white"
+                            style={{
+                              width: `${widthPct}%`,
+                              backgroundColor: s.sourceColor || '#6366f1',
+                              minWidth: 'fit-content',
+                            }}
+                          >
+                            {formatCurrency(s.revenue)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <p className="py-8 text-center text-muted-foreground text-sm">
+                Sem dados de fontes ainda.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Insights row 2: Tempo médio por etapa */}
+      <Card>
+        <CardContent>
+          <h2 className="mb-1 text-base font-semibold">Tempo médio por etapa do funil</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            Onde os leads ficam mais tempo? Etapas com tempo alto podem estar travando vendas.
+          </p>
+          {loadingInsights ? (
+            <Skeleton className="h-32 w-full" />
+          ) : insights && insights.avgTimePerStage.some((s) => s.samples > 0) ? (
+            <div className="space-y-2">
+              {insights.avgTimePerStage
+                .filter((s) => s.samples > 0)
+                .map((s) => {
+                  const maxDays = Math.max(
+                    ...insights.avgTimePerStage.map((x) => x.avgDays),
+                    1,
+                  );
+                  const widthPct = Math.max((s.avgDays / maxDays) * 100, 5);
+                  return (
+                    <div key={s.statusId}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="size-2 rounded-full"
+                            style={{ backgroundColor: s.statusColor }}
+                          />
+                          <span className="font-medium">{s.statusName}</span>
+                        </div>
+                        <span className="text-muted-foreground">
+                          {s.avgDays} dia{s.avgDays !== 1 ? 's' : ''} ({s.samples} amostras)
+                        </span>
+                      </div>
+                      <div className="h-2 rounded bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded"
+                          style={{
+                            width: `${widthPct}%`,
+                            backgroundColor: s.statusColor || '#6366f1',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-muted-foreground text-sm">
+              Ainda não há dados suficientes. Mova leads pelo funil pra ver tempo médio.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -33,4 +33,14 @@ export class DashboardController {
   ) {
     return this.service.getFunnel(orgId, pipelineId);
   }
+
+  @Get('insights')
+  getInsights(
+    @CurrentOrg() orgId: string,
+    @Query('pipelineId') pipelineId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.service.insights(orgId, pipelineId, dateFrom, dateTo);
+  }
 }
