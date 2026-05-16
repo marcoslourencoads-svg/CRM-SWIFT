@@ -3,7 +3,14 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TagsService } from '../tags/tags.service';
+import { NotesService } from '../notes/notes.service';
+import { LeadTasksService } from '../lead-tasks/lead-tasks.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { CreateAutomationDto } from './dto/create-automation.dto';
 import { UpdateAutomationDto } from './dto/update-automation.dto';
 
@@ -13,7 +20,57 @@ const MAX_DEPTH = 3;
 export class AutomationsService {
   private readonly logger = new Logger(AutomationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tags: TagsService,
+    private readonly notes: NotesService,
+    private readonly leadTasks: LeadTasksService,
+    private readonly notifications: NotificationsService,
+    private readonly webhooks: WebhooksService,
+    private readonly customFields: CustomFieldsService,
+  ) {}
+
+  // ─── Event Listeners ───────────────────────────────────────
+
+  @OnEvent('lead.created')
+  handleLeadCreated(payload: { leadId: string; orgId: string }) {
+    return this.evaluateRules(payload.leadId, 'LEAD_CREATED', payload).catch((err) =>
+      this.logger.error(`evaluateRules failed for lead.created: ${err.message}`),
+    );
+  }
+
+  @OnEvent('lead.status_changed')
+  handleStatusChanged(payload: {
+    leadId: string;
+    fromStatusId: string;
+    toStatusId: string;
+    orgId: string;
+  }) {
+    return this.evaluateRules(payload.leadId, 'STATUS_CHANGED', payload).catch((err) =>
+      this.logger.error(`evaluateRules failed for lead.status_changed: ${err.message}`),
+    );
+  }
+
+  @OnEvent('lead.tag_added')
+  handleTagAdded(payload: { leadId: string; tagId: string; orgId: string }) {
+    return this.evaluateRules(payload.leadId, 'TAG_ADDED', payload).catch((err) =>
+      this.logger.error(`evaluateRules failed for lead.tag_added: ${err.message}`),
+    );
+  }
+
+  @OnEvent('lead.task_completed')
+  handleTaskCompleted(payload: { leadId: string; taskId: string; orgId: string }) {
+    return this.evaluateRules(payload.leadId, 'TASK_COMPLETED', payload).catch((err) =>
+      this.logger.error(`evaluateRules failed for lead.task_completed: ${err.message}`),
+    );
+  }
+
+  @OnEvent('lead.assigned')
+  handleAssigned(payload: { leadId: string; assigneeId: string; orgId: string }) {
+    return this.evaluateRules(payload.leadId, 'LEAD_ASSIGNED', payload).catch((err) =>
+      this.logger.error(`evaluateRules failed for lead.assigned: ${err.message}`),
+    );
+  }
 
   // ─── CRUD ──────────────────────────────────────────────────
 
@@ -275,41 +332,165 @@ export class AutomationsService {
     lead: any,
     _eventData: Record<string, any>,
   ): Promise<string> {
+    const params = action.params ?? {};
     switch (action.type) {
-      case 'MOVE_TO_STATUS':
-        this.logger.log(
-          `[ACTION] MOVE_TO_STATUS: lead=${lead.id} -> statusId=${action.params.statusId}`,
-        );
-        // TODO: actually call leadsService.move() when wired up
-        return `Would move lead to status ${action.params.statusId}`;
+      case 'MOVE_TO_STATUS': {
+        if (!params.statusId) return 'skipped: statusId ausente';
+        const updated = await this.prisma.lead.update({
+          where: { id: lead.id },
+          data: {
+            statusId: params.statusId,
+            lastActivityAt: new Date(),
+            lastStatusChangedAt: new Date(),
+            version: { increment: 1 },
+          },
+        });
+        return `moved to status ${updated.statusId}`;
+      }
 
-      case 'ASSIGN_TO':
-        this.logger.log(
-          `[ACTION] ASSIGN_TO: lead=${lead.id} -> assigneeId=${action.params.assigneeId}`,
-        );
-        return `Would assign lead to ${action.params.assigneeId}`;
+      case 'ASSIGN_TO': {
+        if (!params.assigneeId) return 'skipped: assigneeId ausente';
+        await this.prisma.lead.update({
+          where: { id: lead.id },
+          data: { assigneeId: params.assigneeId, lastActivityAt: new Date() },
+        });
+        return `assigned to ${params.assigneeId}`;
+      }
 
-      case 'ADD_TAG':
-        this.logger.log(
-          `[ACTION] ADD_TAG: lead=${lead.id} -> tag=${action.params.tagId}`,
-        );
-        return `Would add tag ${action.params.tagId}`;
+      case 'ADD_TAG': {
+        if (params.tagId) {
+          await this.tags.addTagToLead(lead.organizationId, lead.id, params.tagId);
+          return `tag ${params.tagId} added`;
+        }
+        if (params.tagName) {
+          const tag = await this.tags.upsertByName(lead.organizationId, params.tagName);
+          await this.tags.addTagToLead(lead.organizationId, lead.id, tag.id);
+          return `tag "${params.tagName}" added`;
+        }
+        return 'skipped: tagId/tagName ausente';
+      }
 
-      case 'SET_FIELD':
-        this.logger.log(
-          `[ACTION] SET_FIELD: lead=${lead.id} -> ${action.params.field}=${action.params.value}`,
-        );
-        return `Would set ${action.params.field} to ${action.params.value}`;
+      case 'REMOVE_TAG': {
+        if (!params.tagId) return 'skipped: tagId ausente';
+        try {
+          await this.tags.removeTagFromLead(lead.organizationId, lead.id, params.tagId);
+          return `tag ${params.tagId} removed`;
+        } catch {
+          return `tag ${params.tagId} já não estava no lead`;
+        }
+      }
 
-      case 'SEND_NOTIFICATION':
-        this.logger.log(
-          `[ACTION] SEND_NOTIFICATION: lead=${lead.id} -> ${action.params.message}`,
+      case 'SET_FIELD': {
+        // Atualiza campo direto do Lead (priority, temperature, estimatedValue, etc)
+        if (!params.field) return 'skipped: field ausente';
+        const allowed = ['priority', 'temperature', 'estimatedValue', 'probability', 'title'];
+        if (!allowed.includes(params.field)) {
+          return `skipped: campo "${params.field}" não é editável via automação`;
+        }
+        await this.prisma.lead.update({
+          where: { id: lead.id },
+          data: { [params.field]: params.value, lastActivityAt: new Date() },
+        });
+        return `${params.field} = ${params.value}`;
+      }
+
+      case 'SET_CUSTOM_FIELD': {
+        if (!params.fieldDefinitionId) return 'skipped: fieldDefinitionId ausente';
+        await this.customFields.setValues(lead.id, [
+          { fieldDefinitionId: params.fieldDefinitionId, value: params.value },
+        ]);
+        return `custom field ${params.fieldDefinitionId} = ${params.value}`;
+      }
+
+      case 'CREATE_TASK': {
+        if (!params.title) return 'skipped: title ausente';
+        let dueDate: string | undefined;
+        if (params.dueDateOffsetMinutes) {
+          const d = new Date();
+          d.setMinutes(d.getMinutes() + Number(params.dueDateOffsetMinutes));
+          dueDate = d.toISOString();
+        }
+        const task = await this.leadTasks.create(lead.id, params.createdBy ?? lead.assigneeId ?? lead.id, {
+          title: params.title,
+          description: params.description,
+          dueDate,
+          assigneeId: params.assigneeId ?? lead.assigneeId,
+          priority: params.priority,
+        });
+        return `task ${task.id} created`;
+      }
+
+      case 'CREATE_NOTE': {
+        if (!params.content) return 'skipped: content ausente';
+        const note = await this.notes.create(lead.id, params.userId ?? lead.assigneeId ?? lead.id, {
+          content: params.content,
+        });
+        return `note ${note.id} created`;
+      }
+
+      case 'SEND_NOTIFICATION': {
+        const targetUser = params.userId ?? lead.assigneeId;
+        if (!targetUser) return 'skipped: nenhum user pra notificar';
+        await this.notifications.create(
+          lead.organizationId,
+          targetUser,
+          (params.notificationType ?? 'AUTOMATION') as any,
+          params.title ?? 'Automação',
+          params.message ?? '',
+          { leadId: lead.id, automation: true },
         );
-        return `Would send notification: ${action.params.message}`;
+        return `notification sent to ${targetUser}`;
+      }
+
+      case 'SEND_WEBHOOK': {
+        // Dispara webhook avulso (não persiste delivery log do módulo webhooks)
+        if (!params.url) return 'skipped: url ausente';
+        try {
+          const res = await fetch(params.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'automation.fired',
+              lead: { id: lead.id, title: lead.title, statusId: lead.statusId },
+              ...params.payload,
+            }),
+          });
+          return `webhook ${params.url}: HTTP ${res.status}`;
+        } catch (err: any) {
+          return `webhook error: ${err.message}`;
+        }
+      }
+
+      case 'SEND_WHATSAPP_TEMPLATE': {
+        if (!params.templateId) return 'skipped: templateId ausente';
+        const template = await this.prisma.whatsappTemplate.findFirst({
+          where: { id: params.templateId, organizationId: lead.organizationId },
+        });
+        if (!template) return 'skipped: template não encontrado';
+
+        // Aplica placeholders {{nome}}, {{empresa}}, {{telefone}}
+        const contact = await this.prisma.contact.findUnique({
+          where: { id: lead.contactId ?? '' },
+        }).catch(() => null);
+        const company = await this.prisma.company.findUnique({
+          where: { id: lead.companyId ?? '' },
+        }).catch(() => null);
+
+        const content = template.content
+          .replace(/\{\{nome\}\}/g, contact?.name ?? lead.title)
+          .replace(/\{\{empresa\}\}/g, company?.name ?? '')
+          .replace(/\{\{telefone\}\}/g, contact?.phone ?? '');
+
+        // Registra Note como histórico (sem provider real ainda)
+        await this.notes.create(lead.id, params.userId ?? lead.assigneeId ?? lead.id, {
+          content: `📱 [Automação] WhatsApp template "${template.name}": ${content}`,
+        });
+        return `template "${template.name}" registrado como nota`;
+      }
 
       default:
         this.logger.warn(`Unknown action type: ${action.type}`);
-        return `Unknown action type: ${action.type}`;
+        return `unknown action: ${action.type}`;
     }
   }
 

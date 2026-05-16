@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLeadTaskDto } from './dto/create-lead-task.dto';
 import { UpdateLeadTaskDto } from './dto/update-lead-task.dto';
 
 @Injectable()
 export class LeadTasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventBus: EventEmitter2,
+  ) {}
 
   private readonly taskInclude = {
     assignee: { select: { id: true, name: true, avatarUrl: true } },
@@ -74,13 +78,24 @@ export class LeadTasksService {
   }
 
   async complete(id: string) {
-    const task = await this.prisma.leadTask.findUnique({ where: { id } });
+    const task = await this.prisma.leadTask.findUnique({
+      where: { id },
+      include: { lead: { select: { id: true, organizationId: true } } },
+    });
     if (!task) throw new NotFoundException('Task not found');
 
-    return this.prisma.leadTask.update({
+    const updated = await this.prisma.leadTask.update({
       where: { id },
       data: { completedAt: new Date() },
       include: this.taskInclude,
     });
+
+    this.eventBus.emit('lead.task_completed', {
+      leadId: task.leadId,
+      taskId: id,
+      orgId: task.lead.organizationId,
+    });
+
+    return updated;
   }
 }

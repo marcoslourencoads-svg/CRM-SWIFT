@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { CreateTagDto } from './dto/create-tag.dto';
@@ -22,6 +23,7 @@ export class TagsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activities: ActivitiesService,
+    private readonly eventBus: EventEmitter2,
   ) {}
 
   async findAll(orgId: string) {
@@ -130,6 +132,8 @@ export class TagsService {
     await this.activities.logActivity(leadId, userId ?? null, 'TAG_ADDED', {
       tag: tag.name,
     });
+
+    this.eventBus.emit('lead.tag_added', { leadId, tagId, orgId, userId });
 
     return result;
   }

@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivitiesService } from '../activities/activities.service';
 import { PipelinePermissionsService } from '../pipelines/pipeline-permissions.service';
@@ -19,6 +20,7 @@ export class LeadsService {
     private readonly prisma: PrismaService,
     private readonly activities: ActivitiesService,
     private readonly pipelinePermissions: PipelinePermissionsService,
+    private readonly eventBus: EventEmitter2,
   ) {}
 
   async create(orgId: string, userId: string, dto: CreateLeadDto) {
@@ -124,6 +126,12 @@ export class LeadsService {
 
     await this.activities.logActivity(lead.id, userId, 'CREATED', {
       title: lead.title,
+    });
+
+    this.eventBus.emit('lead.created', {
+      leadId: lead.id,
+      orgId,
+      userId,
     });
 
     return lead;
@@ -339,6 +347,14 @@ export class LeadsService {
         from: fromName,
         to: toName,
       });
+
+      this.eventBus.emit('lead.status_changed', {
+        leadId: id,
+        fromStatusId: lead.statusId,
+        toStatusId: dto.statusId,
+        orgId,
+        userId,
+      });
     }
 
     return updated;
@@ -364,6 +380,15 @@ export class LeadsService {
       await this.activities.logActivity(id, userId, 'ASSIGNED', {
         assignee: updated.assignee?.name ?? null,
       });
+
+      if (dto.assigneeId) {
+        this.eventBus.emit('lead.assigned', {
+          leadId: id,
+          assigneeId: dto.assigneeId,
+          orgId,
+          userId,
+        });
+      }
     }
 
     return updated;
