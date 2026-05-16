@@ -4,7 +4,7 @@ import {
   IsEnum,
   IsDateString,
 } from 'class-validator';
-import { LeadPriority } from '@prisma/client';
+import { LeadPriority, LeadTaskType } from '@prisma/client';
 
 export class UpdateLeadTaskDto {
   @IsString()
@@ -26,4 +26,8 @@ export class UpdateLeadTaskDto {
   @IsEnum(LeadPriority)
   @IsOptional()
   priority?: LeadPriority;
+
+  @IsEnum(LeadTaskType)
+  @IsOptional()
+  type?: LeadTaskType;
 }

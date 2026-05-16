@@ -664,6 +664,15 @@ model Note {
   @@map("notes")
 }
 
+enum LeadTaskType {
+  TASK
+  CALL
+  MEETING
+  EMAIL
+  DEADLINE
+  LUNCH
+}
+
 model LeadTask {
   id          String    @id @default(cuid())
   leadId      String    @map("lead_id")
@@ -671,6 +680,7 @@ model LeadTask {
   createdBy   String    @map("created_by")
   title       String
   description String?
+  type        LeadTaskType @default(TASK)
   dueDate     DateTime? @map("due_date")
   completedAt DateTime? @map("completed_at")
   priority    LeadPriority @default(MEDIUM)

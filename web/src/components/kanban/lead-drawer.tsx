@@ -267,6 +267,7 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
   const [tasks, setTasks] = useState<TaskEntry[]>([]);
   const [taskDraftTitle, setTaskDraftTitle] = useState('');
   const [taskDraftDueDate, setTaskDraftDueDate] = useState('');
+  const [taskDraftType, setTaskDraftType] = useState<'TASK' | 'CALL' | 'MEETING' | 'EMAIL' | 'DEADLINE' | 'LUNCH'>('TASK');
   const [savingTask, setSavingTask] = useState(false);
 
   // Local field state for controlled inputs
@@ -465,18 +466,22 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
     if (!title) return;
     setSavingTask(true);
     try {
-      const payload: { title: string; dueDate?: string } = { title };
+      const payload: { title: string; type: string; dueDate?: string } = {
+        title,
+        type: taskDraftType,
+      };
       if (taskDraftDueDate) payload.dueDate = new Date(taskDraftDueDate).toISOString();
       await api.post(`/leads/${lead.id}/tasks`, payload);
       setTaskDraftTitle('');
       setTaskDraftDueDate('');
+      setTaskDraftType('TASK');
       await fetchTasks(lead.id);
     } catch (err) {
       console.error('Failed to add task', err);
     } finally {
       setSavingTask(false);
     }
-  }, [lead, taskDraftTitle, taskDraftDueDate, fetchTasks]);
+  }, [lead, taskDraftTitle, taskDraftDueDate, taskDraftType, fetchTasks]);
 
   const completeTask = useCallback(
     async (taskId: string) => {
@@ -1052,6 +1057,26 @@ export function LeadDrawer({ leadId, onClose, onLeadUpdated }: LeadDrawerProps) 
                     placeholder="O que precisa ser feito?"
                   />
                   <div className="flex items-center gap-2">
+                    <Select
+                      value={taskDraftType}
+                      onValueChange={(v) =>
+                        setTaskDraftType(
+                          (v ?? 'TASK') as 'TASK' | 'CALL' | 'MEETING' | 'EMAIL' | 'DEADLINE' | 'LUNCH',
+                        )
+                      }
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TASK">Tarefa</SelectItem>
+                        <SelectItem value="CALL">Ligação</SelectItem>
+                        <SelectItem value="MEETING">Reunião</SelectItem>
+                        <SelectItem value="EMAIL">E-mail</SelectItem>
+                        <SelectItem value="DEADLINE">Prazo</SelectItem>
+                        <SelectItem value="LUNCH">Almoço</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Input
                       type="datetime-local"
                       value={taskDraftDueDate}

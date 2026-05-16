@@ -16,6 +16,8 @@ import {
   MessageSquare,
   MessagesSquare,
   ScrollText,
+  CalendarClock,
+  List,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -32,16 +34,20 @@ interface Pipeline {
 
 const staticNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/activity', label: 'Atividade', icon: ScrollText },
   { href: '/leads', label: 'Todos os leads', icon: Layers },
   { href: '/contacts', label: 'Contatos', icon: Contact },
-  { href: '/calendar', label: 'Calendário', icon: Calendar },
+  { href: '/activity', label: 'Histórico', icon: ScrollText },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
 const communicationsItems = [
   { href: '/inbox', label: 'WhatsApp / Inbox', icon: MessageSquare },
   { href: '/team-chat', label: 'Chat do Time', icon: MessagesSquare },
+];
+
+const agendaItems = [
+  { href: '/activities', label: 'Lista', icon: List },
+  { href: '/calendar', label: 'Calendário', icon: Calendar },
 ];
 
 export function Sidebar() {
@@ -51,6 +57,7 @@ export function Sidebar() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [pipelinesOpen, setPipelinesOpen] = useState(true);
   const [commsOpen, setCommsOpen] = useState(true);
+  const [agendaOpen, setAgendaOpen] = useState(true);
 
   useEffect(() => {
     api
@@ -139,6 +146,42 @@ export function Sidebar() {
         </button>
         {commsOpen &&
           communicationsItems.map((item) => {
+            const isActive = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 rounded-md py-1.5 pl-10 pr-3 text-sm transition-colors',
+                  isActive
+                    ? 'bg-accent text-accent-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
+                )}
+              >
+                <item.icon className="h-3.5 w-3.5" />
+                {item.label}
+              </Link>
+            );
+          })}
+
+        <Separator className="my-2" />
+
+        {/* Agenda section */}
+        <button
+          onClick={() => setAgendaOpen((v) => !v)}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground transition-colors"
+        >
+          <CalendarClock className="h-4 w-4" />
+          <span className="flex-1 text-left">Agenda</span>
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 transition-transform',
+              agendaOpen && 'rotate-180',
+            )}
+          />
+        </button>
+        {agendaOpen &&
+          agendaItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
               <Link

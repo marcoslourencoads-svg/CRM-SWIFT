@@ -35,6 +35,7 @@ export class LeadTasksController {
     @Query('assigneeId') assigneeId?: string,
     @Query('pipelineId') pipelineId?: string,
     @Query('status') status?: 'pending' | 'completed' | 'overdue',
+    @Query('type') type?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
@@ -42,6 +43,7 @@ export class LeadTasksController {
       assigneeId,
       pipelineId,
       status,
+      type,
       from: from ? new Date(from) : undefined,
       to: to ? new Date(to) : undefined,
     });

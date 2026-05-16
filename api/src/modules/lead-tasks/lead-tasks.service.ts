@@ -55,6 +55,7 @@ export class LeadTasksService {
       assigneeId?: string;
       pipelineId?: string;
       status?: 'pending' | 'completed' | 'overdue';
+      type?: string;
       from?: Date;
       to?: Date;
     } = {},
@@ -66,6 +67,7 @@ export class LeadTasksService {
 
     if (filters.assigneeId) where.assigneeId = filters.assigneeId;
     if (filters.pipelineId) where.lead = { ...where.lead, pipelineId: filters.pipelineId };
+    if (filters.type) where.type = filters.type;
 
     if (filters.status === 'pending') where.completedAt = null;
     else if (filters.status === 'completed') where.completedAt = { not: null };
@@ -97,6 +99,7 @@ export class LeadTasksService {
         assigneeId: dto.assigneeId ?? userId,
         title: dto.title,
         description: dto.description,
+        type: dto.type ?? 'TASK',
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         priority: dto.priority ?? 'MEDIUM',
       },
@@ -116,6 +119,7 @@ export class LeadTasksService {
         ...(dto.dueDate !== undefined ? { dueDate: new Date(dto.dueDate) } : {}),
         ...(dto.assigneeId !== undefined ? { assigneeId: dto.assigneeId } : {}),
         ...(dto.priority !== undefined ? { priority: dto.priority } : {}),
+        ...(dto.type !== undefined ? { type: dto.type } : {}),
       },
       include: this.taskInclude,
     });
