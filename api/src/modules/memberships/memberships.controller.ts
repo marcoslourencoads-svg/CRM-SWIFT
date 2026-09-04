@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { MembershipsService } from './memberships.service';
 import { InviteMemberDto } from './dto/invite-member.dto';
+import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { CurrentOrg, CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
@@ -24,6 +25,12 @@ export class MembershipsController {
   @Get('members')
   listMembers(@CurrentOrg() orgId: string) {
     return this.service.listMembers(orgId);
+  }
+
+  @Roles('ADMIN')
+  @Post('members')
+  addMember(@CurrentOrg() orgId: string, @Body() dto: AddMemberDto) {
+    return this.service.addMember(orgId, dto.email, dto.name, dto.role, dto.password);
   }
 
   @Post('invitations')

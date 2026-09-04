@@ -74,6 +74,83 @@ export class MembershipsService {
     });
   }
 
+  /**
+   * Adiciona um membro direto, sem passar por convite por email: o admin
+   * informa nome, email e uma senha provisoria, e a pessoa ja entra na
+   * organizacao. Se o email ja tiver cadastro no sistema, reaproveitamos o
+   * usuario e a senha dele permanece intacta.
+   */
+  async addMember(
+    orgId: string,
+    email: string,
+    name: string,
+    role: MembershipRole,
+    password?: string,
+  ) {
+    // Dono da organizacao e definido no cadastro dela, nunca por aqui.
+    if (role === 'OWNER') {
+      throw new BadRequestException('Não é possível adicionar um membro como OWNER');
+    }
+
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+
+    if (existingUser) {
+      const existingMembership = await this.prisma.membership.findUnique({
+        where: {
+          userId_organizationId: { userId: existingUser.id, organizationId: orgId },
+        },
+      });
+      if (existingMembership) {
+        throw new ConflictException('Este email já é membro da organização');
+      }
+    } else if (!password) {
+      throw new BadRequestException(
+        'Senha provisória é obrigatória para cadastrar um novo usuário',
+      );
+    }
+
+    // Fora da transacao de proposito: o bcrypt custa ~250ms e seguraria a
+    // conexao do banco a toa.
+    const passwordHash = existingUser ? null : await bcrypt.hash(password as string, 12);
+
+    const membership = await this.prisma.$transaction(async (tx) => {
+      const user =
+        existingUser ??
+        (await tx.user.create({
+          data: { name, email, passwordHash: passwordHash as string },
+        }));
+
+      const created = await tx.membership.create({
+        data: { userId: user.id, organizationId: orgId, role },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, avatarUrl: true },
+          },
+        },
+      });
+
+      // Um convite pendente para este email nesta org perdeu a razao de existir
+      // e continuaria aparecendo na lista de pendentes.
+      await tx.invitation.updateMany({
+        where: { organizationId: orgId, email, status: 'PENDING' },
+        data: { status: 'ACCEPTED', acceptedAt: new Date() },
+      });
+
+      return created;
+    });
+
+    return {
+      id: membership.id,
+      role: membership.role,
+      name: membership.user.name,
+      email: membership.user.email,
+      avatarUrl: membership.user.avatarUrl,
+      // Avisa a UI que a senha informada nao foi aplicada: a pessoa ja tinha
+      // conta e continua entrando com a senha antiga dela.
+      userAlreadyExisted: Boolean(existingUser),
+    };
+  }
+
   async acceptInvite(token: string, name: string, password: string) {
     const invitation = await this.prisma.invitation.findUnique({ where: { token } });
 

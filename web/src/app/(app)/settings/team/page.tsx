@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { UserPlus, Loader2 } from 'lucide-react';
+import { UserPlus, Loader2, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,9 +48,11 @@ export default function TeamPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('MEMBER');
-  const [inviting, setInviting] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState('MEMBER');
+  const [saving, setSaving] = useState(false);
   const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
 
   const myRole = organization?.role ?? 'MEMBER';
@@ -92,23 +94,39 @@ export default function TeamPage() {
     fetchData();
   }, []);
 
-  async function handleInvite() {
-    if (!inviteEmail) return;
-    setInviting(true);
+  function generatePassword() {
+    const alphabet = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = crypto.getRandomValues(new Uint32Array(12));
+    setNewPassword(Array.from(bytes, (b) => alphabet[b % alphabet.length]).join(''));
+  }
+
+  async function handleAddMember() {
+    if (!newName || !newEmail || !newPassword) return;
+    setSaving(true);
     try {
-      const { data } = await api.post('/invitations', {
-        email: inviteEmail,
-        role: inviteRole,
+      const { data } = await api.post('/members', {
+        name: newName,
+        email: newEmail,
+        password: newPassword,
+        role: newRole,
       });
-      toast.success(`Convite enviado para ${inviteEmail}`);
+      if (data.data?.userAlreadyExisted) {
+        toast.success(
+          `${newEmail} já tinha conta e foi adicionada ao time. Ela entra com a senha dela — a senha digitada aqui foi ignorada.`,
+        );
+      } else {
+        toast.success(`${newEmail} adicionado. Envie o email e a senha para a pessoa entrar.`);
+      }
       setDialogOpen(false);
-      setInviteEmail('');
-      setInviteRole('MEMBER');
+      setNewName('');
+      setNewEmail('');
+      setNewPassword('');
+      setNewRole('MEMBER');
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Erro ao enviar convite');
+      toast.error(err.response?.data?.message || 'Erro ao adicionar membro');
     } finally {
-      setInviting(false);
+      setSaving(false);
     }
   }
 
@@ -134,26 +152,54 @@ export default function TeamPage() {
         <h2 className="text-lg font-semibold">Time</h2>
         <Button size="sm" onClick={() => setDialogOpen(true)}>
           <UserPlus className="h-4 w-4 mr-2" />
-          Convidar membro
+          Adicionar membro
         </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Convidar novo membro</DialogTitle>
+              <DialogTitle>Adicionar novo membro</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
+              <p className="text-xs text-muted-foreground">
+                A pessoa entra na hora com o email e a senha definidos aqui. Envie os dados
+                para ela — o sistema não dispara email.
+              </p>
+              <div className="space-y-2">
+                <Label>Nome</Label>
+                <Input
+                  placeholder="Maria Silva"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                />
+              </div>
               <div className="space-y-2">
                 <Label>Email</Label>
                 <Input
                   type="email"
                   placeholder="email@empresa.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
+                <Label>Senha provisória</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="mínimo 8 caracteres"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                  <Button type="button" variant="outline" size="icon" onClick={generatePassword}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Fica visível para você copiar. Peça para a pessoa trocar depois de entrar.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label>Função</Label>
-                <Select value={inviteRole} onValueChange={(v) => v && setInviteRole(v)}>
+                <Select value={newRole} onValueChange={(v) => v && setNewRole(v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -164,9 +210,13 @@ export default function TeamPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleInvite} disabled={inviting || !inviteEmail} className="w-full">
-                {inviting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Enviar convite
+              <Button
+                onClick={handleAddMember}
+                disabled={saving || !newName || !newEmail || newPassword.length < 8}
+                className="w-full"
+              >
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Adicionar membro
               </Button>
             </div>
           </DialogContent>
