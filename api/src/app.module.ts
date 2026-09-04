@@ -33,6 +33,7 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { TeamChatModule } from './modules/team-chat/team-chat.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { MetaCapiModule } from './modules/meta-capi/meta-capi.module';
 import { validateEnv } from './common/config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { OrgMemberGuard } from './common/guards/org-member.guard';
@@ -77,6 +78,7 @@ import { HealthController } from './health.controller';
     ContactsModule,
     TeamChatModule,
     OrganizationsModule,
+    MetaCapiModule,
   ],
   controllers: [HealthController],
   providers: [

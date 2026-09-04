@@ -282,6 +282,8 @@ model User {
   attachments            Attachment[]             @relation("AttachmentUser")
   notifications          Notification[]           @relation("NotificationRecipient")
   notificationPreferences NotificationPreference[] @relation("NotificationPreference")
+  ownedProspects         Prospect[]               @relation("ProspectOwner")
+  prospectTouches        ProspectTouch[]          @relation("ProspectToucher")
 
   @@map("users")
 }
@@ -480,6 +482,7 @@ model Lead {
   attachments      Attachment[]
   tracking         LeadTracking?
   score            LeadScore?
+  metaCapiEvents   MetaCapiEvent[]
 
   @@index([organizationId, pipelineId, statusId, deletedAt])
   @@index([organizationId, assigneeId, deletedAt])
@@ -727,6 +730,10 @@ model LeadTracking {
   landingPage      String?  @map("landing_page")
   gclid            String?
   fbclid           String?
+  fbc              String?
+  fbp              String?
+  metaLeadId       String?  @map("meta_lead_id")
+  clickedAt        DateTime? @map("clicked_at")
   ip               String?
   userAgent        String?  @map("user_agent")
   createdAt        DateTime @default(now()) @map("created_at")
@@ -735,7 +742,43 @@ model LeadTracking {
 
   @@index([utmSource])
   @@index([utmCampaign])
+  @@index([metaLeadId])
   @@map("lead_trackings")
+}
+
+// ─── Meta Conversions API (CRM) ─────────────────────────────
+
+enum MetaCapiStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model MetaCapiEvent {
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  leadId         String         @map("lead_id")
+  eventName      String         @map("event_name")
+  eventId        String         @unique @map("event_id")
+  eventTime      DateTime       @map("event_time")
+  status         MetaCapiStatus @default(PENDING)
+  datasetId      String?        @map("dataset_id")
+  matchKeys      Json?          @map("match_keys")
+  payload        Json?
+  responseBody   String?        @map("response_body")
+  fbTraceId      String?        @map("fb_trace_id")
+  attempts       Int            @default(0)
+  sentAt         DateTime?      @map("sent_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, eventName])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("meta_capi_events")
 }
 
 // ─── API Keys ───────────────────────────────────────────────
@@ -962,3 +1005,159 @@ model WebhookLog {
   @@map("webhook_logs")
 }
 
+
+// ─── Prospecção Ativa (Outbound) ────────────────────────────
+
+enum ProspectStage {
+  NEW // na lista, ainda não abordado
+  CONTACTED // 1ª abordagem enviada
+  FOLLOW_UP // ao menos 1 follow-up enviado, sem resposta
+  RESPONDED // respondeu
+  MEETING_SET // agendou reunião
+  MEETING_DONE // compareceu
+  WON // fechou contrato
+  LOST // não fechou
+  DISQUALIFIED // fora do ICP / não perturbe
+}
+
+enum ProspectChannel {
+  INSTAGRAM
+  WHATSAPP
+  EMAIL
+  PHONE
+  OTHER
+}
+
+enum TouchOutcome {
+  NO_REPLY
+  REPLIED_POSITIVE
+  REPLIED_NEGATIVE
+  NO_ANSWER
+  BOUNCED
+}
+
+// Lote / campanha de prospecção. A cadência vive aqui: é ela que
+// calcula o nextActionAt de cada toque, em vez da data digitada à mão.
+model ProspectList {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  name           String
+  description    String?
+  niche          String?
+  cadenceDays    Int[]     @default([2, 4, 7]) @map("cadence_days")
+  createdBy      String?   @map("created_by")
+  archivedAt     DateTime? @map("archived_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  prospects Prospect[]
+
+  @@index([organizationId, archivedAt])
+  @@map("prospect_lists")
+}
+
+// Script de abordagem. Substitui o texto livre da planilha para
+// que a conversão por abordagem possa ser agregada.
+model ProspectApproach {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  body           String?
+  isActive       Boolean  @default(true) @map("is_active")
+  position       Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  touches ProspectTouch[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, position])
+  @@map("prospect_approaches")
+}
+
+model Prospect {
+  id             String          @id @default(cuid())
+  organizationId String          @map("organization_id")
+  listId         String?         @map("list_id")
+  ownerId        String?         @map("owner_id")
+
+  // Identidade
+  name           String
+  handle         String?
+  profileUrl     String?         @map("profile_url")
+  phone          String?
+  email          String?
+  city           String?
+
+  // Qualificação (ICP)
+  hasAds         Boolean?        @map("has_ads")
+  niche          String?
+  followers      Int?
+
+  // Estado
+  stage          ProspectStage   @default(NEW)
+  channel        ProspectChannel @default(INSTAGRAM)
+
+  // Cadência
+  touchCount     Int             @default(0) @map("touch_count")
+  lastTouchAt    DateTime?       @map("last_touch_at")
+  nextActionAt   DateTime?       @map("next_action_at")
+
+  // Carimbos por etapa — base do funil por coorte
+  firstContactedAt DateTime?     @map("first_contacted_at")
+  respondedAt      DateTime?     @map("responded_at")
+  meetingSetAt     DateTime?     @map("meeting_set_at")
+  meetingHeldAt    DateTime?     @map("meeting_held_at")
+  wonAt            DateTime?     @map("won_at")
+  lostAt           DateTime?     @map("lost_at")
+
+  // Resultado
+  dealValue      Int             @default(0) @map("deal_value")
+  lostReasonId   String?         @map("lost_reason_id")
+  lostNote       String?         @map("lost_note")
+
+  // Conversão para o pipeline de vendas
+  leadId         String?         @unique @map("lead_id")
+  contactId      String?         @map("contact_id")
+
+  notes          String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  deletedAt      DateTime?       @map("deleted_at")
+
+  list    ProspectList?   @relation(fields: [listId], references: [id], onDelete: SetNull)
+  owner   User?           @relation("ProspectOwner", fields: [ownerId], references: [id])
+  touches ProspectTouch[]
+
+  @@index([organizationId, stage, deletedAt])
+  @@index([organizationId, nextActionAt])
+  @@index([organizationId, ownerId, stage])
+  @@index([organizationId, firstContactedAt])
+  @@index([listId])
+  @@map("prospects")
+}
+
+// Um registro por toque. Substitui as 6 colunas de FUP da planilha
+// e permite cadência ilimitada + taxa de resposta por número de toque.
+model ProspectTouch {
+  id         String          @id @default(cuid())
+  prospectId String          @map("prospect_id")
+  userId     String?         @map("user_id")
+  sequence   Int // 1 = abordagem, 2 = FUP 1, 3 = FUP 2, ...
+  channel    ProspectChannel
+  approachId String?         @map("approach_id")
+  templateId String?         @map("template_id")
+  message    String?
+  outcome    TouchOutcome    @default(NO_REPLY)
+  sentAt     DateTime        @default(now()) @map("sent_at")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  prospect Prospect          @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  user     User?             @relation("ProspectToucher", fields: [userId], references: [id])
+  approach ProspectApproach? @relation(fields: [approachId], references: [id])
+
+  @@unique([prospectId, sequence])
+  @@index([prospectId, sentAt])
+  @@index([approachId])
+  @@map("prospect_touches")
+}

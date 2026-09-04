@@ -79,6 +79,24 @@ export class CreatePublicLeadDto {
   @IsOptional()
   fbclid?: string;
 
+  /** Cookie _fbc do navegador, no formato fb.1.<timestamp>.<fbclid>. */
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  fbc?: string;
+
+  /** Cookie _fbp do navegador. Não existe fora do browser — precisa vir do form. */
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  fbp?: string;
+
+  /** leadgen_id da Meta (15-17 dígitos), quando o lead vem de Formulário Instantâneo. */
+  @Transform(emptyToUndefined)
+  @IsString()
+  @IsOptional()
+  meta_lead_id?: string;
+
   @Transform(emptyToUndefined)
   @IsString()
   @IsOptional()

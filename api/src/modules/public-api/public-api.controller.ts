@@ -125,7 +125,10 @@ export class PublicApiController {
         dto.referrer_url ||
         dto.landing_page ||
         dto.gclid ||
-        dto.fbclid;
+        dto.fbclid ||
+        dto.fbc ||
+        dto.fbp ||
+        dto.meta_lead_id;
 
       let tracking = null;
       if (hasTracking) {
@@ -141,6 +144,12 @@ export class PublicApiController {
             landingPage: dto.landing_page,
             gclid: dto.gclid,
             fbclid: dto.fbclid,
+            fbc: dto.fbc,
+            fbp: dto.fbp,
+            metaLeadId: dto.meta_lead_id,
+            // Hora do clique: usada para reconstruir o _fbc quando o form
+            // mandou só o fbclid. Sem isso o click id fica sem timestamp.
+            clickedAt: dto.fbclid || dto.fbc ? new Date() : undefined,
             ip: req.ip,
             userAgent: req.headers['user-agent'],
           },
