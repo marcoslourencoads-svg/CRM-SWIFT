@@ -182,7 +182,7 @@ export default function TeamPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Senha provisória</Label>
+                <Label>Senha provisória (mín. 8 caracteres)</Label>
                 <div className="flex gap-2">
                   <Input
                     placeholder="mínimo 8 caracteres"
@@ -193,9 +193,17 @@ export default function TeamPage() {
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Fica visível para você copiar. Peça para a pessoa trocar depois de entrar.
-                </p>
+                {newPassword.length > 0 && newPassword.length < 8 ? (
+                  <p className="text-xs text-destructive">
+                    A senha precisa de pelo menos 8 caracteres — faltam{' '}
+                    {8 - newPassword.length}. Use o botão ao lado para gerar uma.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Mínimo de 8 caracteres. Fica visível para você copiar — peça para a pessoa
+                    trocar depois de entrar.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Função</Label>
