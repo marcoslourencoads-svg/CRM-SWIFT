@@ -192,18 +192,37 @@ describe('ProspectsController (rotas)', () => {
   });
 
   describe('validacao de entrada', () => {
-    it('recusa criar prospect sem nome', async () => {
-      await request(app.getHttpServer()).post('/prospects').send({}).expect(400);
-      expect(service.create).not.toHaveBeenCalled();
-    });
-
-    it('cria com apenas o nome — o resto e opcional', async () => {
+    it('cria com apenas o nome', async () => {
       await request(app.getHttpServer())
         .post('/prospects')
         .send({ name: 'Rafael Souza' })
         .expect(201);
 
       expect(service.create).toHaveBeenCalledWith('org-1', 'user-1', { name: 'Rafael Souza' });
+    });
+
+    it('cria SEM nome, so com o @ do perfil', async () => {
+      // O nome deixou de ser obrigatorio: em prospeccao fria muitas
+      // vezes so se tem o perfil. Quem cobra "pelo menos um
+      // identificador" e o servico, nao o DTO — a regra envolve varios
+      // campos e nao cabe num decorator de campo unico.
+      await request(app.getHttpServer())
+        .post('/prospects')
+        .send({ handle: '@barbeariaimperial' })
+        .expect(201);
+
+      expect(service.create).toHaveBeenCalledWith('org-1', 'user-1', {
+        handle: '@barbeariaimperial',
+      });
+    });
+
+    it('cria SEM nome, so com telefone', async () => {
+      await request(app.getHttpServer())
+        .post('/prospects')
+        .send({ phone: '(19) 99999-8888' })
+        .expect(201);
+
+      expect(service.create).toHaveBeenCalled();
     });
 
     it('recusa etapa que nao existe no enum', async () => {

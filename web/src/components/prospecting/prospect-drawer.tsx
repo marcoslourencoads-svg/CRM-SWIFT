@@ -36,7 +36,6 @@ import {
   toDateInput,
   toTimeInput,
   paraInstante,
-  formatCompromisso,
   type Prospect,
   type ProspectChannel,
   type ProspectStage,
@@ -115,7 +114,7 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
     setSaving(true);
     try {
       await api.patch(`/prospects/${prospect.id}`, {
-        name: form.name.trim() || prospect.name,
+        name: form.name.trim(),
         business: form.business.trim(),
         handle: form.handle.trim(),
         phone: form.phone.trim(),
@@ -467,7 +466,11 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
                 <h3 className="text-sm font-semibold">Dados</h3>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Nome do contato" value={form.name} onChange={(v) => set('name', v)} />
+                  <Field
+                    label="Nome do contato (opcional)"
+                    value={form.name}
+                    onChange={(v) => set('name', v)}
+                  />
                   <Field label="Negócio" value={form.business} onChange={(v) => set('business', v)} />
                   <Field label="Nicho" value={form.niche} onChange={(v) => set('niche', v)} />
                   <Field label="Cidade" value={form.city} onChange={(v) => set('city', v)} />

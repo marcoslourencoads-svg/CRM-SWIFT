@@ -143,11 +143,16 @@ export class ProspectImportService {
       const rowNum = index + 2; // +1 pelo cabeçalho, +1 porque planilha conta de 1
       try {
         const handle = this.handleFrom(row.handle, row.profileUrl);
-        const name = row.name?.trim() || row.business?.trim() || handle || '';
+        const name = row.name?.trim() || null;
+        const business = row.business?.trim() || null;
+        const phone = row.phone?.trim() || null;
+        const email = row.email?.trim() || null;
 
-        if (!name) {
+        // O nome deixou de ser obrigatorio, mas alguma identificacao
+        // precisa existir — senao a linha vira um card em branco.
+        if (!name && !business && !handle && !phone && !email) {
           skipped += 1;
-          errors.push({ row: rowNum, message: 'Sem nome, negocio ou perfil identificavel' });
+          errors.push({ row: rowNum, message: 'Sem nome, negocio, perfil, telefone ou e-mail' });
           continue;
         }
 
@@ -177,11 +182,11 @@ export class ProspectImportService {
             listId,
             ownerId: userId,
             name,
-            business: row.business?.trim() || null,
+            business,
             handle,
             profileUrl: row.profileUrl?.trim() || null,
-            phone: row.phone?.trim() || null,
-            email: row.email?.trim() || null,
+            phone,
+            email,
             city: row.city?.trim() || null,
             niche: row.niche?.trim() || null,
             hasAds: this.boolFrom(row.hasAds),
@@ -261,7 +266,7 @@ export class ProspectImportService {
     });
 
     const rows = prospects.map((p) => ({
-      Nome: p.name,
+      Nome: p.name ?? '',
       Negocio: p.business ?? '',
       Nicho: p.niche ?? '',
       Instagram: p.handle ? `@${p.handle}` : '',

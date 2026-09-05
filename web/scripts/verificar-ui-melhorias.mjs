@@ -172,6 +172,39 @@ async function main() {
   );
   await page.screenshot({ path: `${SAIDA}/m4-calendario.png` });
 
+  titulo('5. Nome deixou de ser obrigatório');
+  await page.goto(`${WEB}/prospecting`, { waitUntil: 'domcontentloaded' });
+  await page.getByText('Fila do dia', { exact: false }).first().waitFor({ timeout: 25000 });
+  await page.getByRole('button', { name: /Novo prospect/i }).first().click();
+  await page.locator('#np-name').waitFor({ timeout: 15000 });
+
+  conferir('rótulo diz que é opcional', await temTexto(page, 'Nome do contato (opcional)'));
+  conferir(
+    'a ajuda explica que basta um identificador',
+    await temTexto(page, 'Basta um jeito de identificar'),
+  );
+
+  const botao = page.getByRole('button', { name: /Adicionar prospect/i });
+  conferir('botão desabilitado com o form vazio', await botao.isDisabled());
+
+  // Só o @, sem nome nenhum
+  await page.locator('#np-handle').fill('@barbeariaimperial');
+  await page.waitForTimeout(300);
+  conferir('só o @ já habilita o botão', await botao.isEnabled());
+  await botao.click();
+  await page.waitForTimeout(2500);
+
+  conferir('cadastrou sem nome', !(await temTexto(page, 'Preencha ao menos um')));
+  conferir(
+    'o card mostra o @ em vez de ficar em branco',
+    await temTexto(page, '@barbeariaimperial'),
+  );
+  conferir(
+    'não aparece "Sem identificação"',
+    !(await temTexto(page, 'Sem identificação')),
+  );
+  await page.screenshot({ path: `${SAIDA}/m5-sem-nome.png` });
+
   titulo('Console do navegador');
   const relevantes = erros.filter(
     (e) => !/favicon|404 \(Not Found\)|Download the React DevTools/i.test(e),

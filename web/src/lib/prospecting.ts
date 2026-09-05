@@ -45,7 +45,7 @@ export interface ProspectNote {
 
 export interface Prospect {
   id: string;
-  name: string;
+  name: string | null;
   business: string | null;
   handle: string | null;
   profileUrl: string | null;
@@ -301,17 +301,44 @@ export function daysOverdue(p: Prospect): number {
   return Math.max(Math.ceil(diff / DAY), 0);
 }
 
-/** Rótulo do card: o negócio lidera, a pessoa é o fallback. */
+/**
+ * Rótulo do card.
+ *
+ * O nome não é obrigatório — em prospecção fria muitas vezes só se tem o
+ * @ do perfil ou o telefone. A cascata garante que sempre haja algo
+ * legível, em vez de um card em branco. Mesma ordem do backend
+ * (`rotuloDoProspect`), para a tela e a notificação dizerem o mesmo.
+ */
 export function displayName(p: Prospect): string {
-  return p.business?.trim() || p.name;
+  return (
+    p.business?.trim() ||
+    p.name?.trim() ||
+    (p.handle?.trim() ? `@${p.handle.trim()}` : '') ||
+    p.phone?.trim() ||
+    p.email?.trim() ||
+    'Sem identificação'
+  );
 }
 
+/** Campos que servem para reconhecer o prospect. Basta um. */
+export const CAMPOS_DE_IDENTIFICACAO = [
+  'name',
+  'business',
+  'handle',
+  'phone',
+  'email',
+] as const;
+
 export function subtitleOf(p: Prospect): string {
+  // Quando o @ virou o título (prospect sem nome nem negócio), repeti-lo
+  // aqui só ocuparia espaço.
+  const titulo = displayName(p);
+  const arroba = p.handle ? `@${p.handle}` : null;
   const parts = [
     p.niche,
     CHANNEL_META[p.channel]?.label,
     cadenceDay(p),
-    p.handle ? `@${p.handle}` : null,
+    arroba === titulo ? null : arroba,
   ].filter(Boolean);
   return parts.join(' · ');
 }

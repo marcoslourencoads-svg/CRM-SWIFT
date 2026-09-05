@@ -1,4 +1,4 @@
-import { ProspectsService } from './prospects.service';
+import { ProspectsService, rotuloDoProspect } from './prospects.service';
 
 /**
  * Trava a máquina de etapas e a cadência.
@@ -15,6 +15,89 @@ describe('ProspectsService', () => {
     (service as unknown as Record<string, (...a: unknown[]) => unknown>)[name](...args);
 
   const when = new Date('2026-09-04T12:00:00Z');
+
+  // ─── Identificacao do prospect ───────────────────────────
+
+  describe('rotuloDoProspect', () => {
+    // O nome deixou de ser obrigatorio, entao o rotulo precisa achar
+    // alguma coisa para mostrar — senao o card, a notificacao e o titulo
+    // do lead sairiam em branco.
+    it('o negocio lidera', () => {
+      expect(rotuloDoProspect({ business: 'Barbearia Imperial', name: 'Rafael' })).toBe(
+        'Barbearia Imperial',
+      );
+    });
+
+    it('sem negocio, usa a pessoa', () => {
+      expect(rotuloDoProspect({ name: 'Rafael' })).toBe('Rafael');
+    });
+
+    it('sem nenhum dos dois, usa o @ do perfil', () => {
+      expect(rotuloDoProspect({ handle: 'barbeariaimperial' })).toBe('@barbeariaimperial');
+    });
+
+    it('depois o telefone, depois o e-mail', () => {
+      expect(rotuloDoProspect({ phone: '(19) 99999-8888' })).toBe('(19) 99999-8888');
+      expect(rotuloDoProspect({ email: 'contato@barbearia.com' })).toBe(
+        'contato@barbearia.com',
+      );
+    });
+
+    it('ignora campo so com espaco', () => {
+      expect(rotuloDoProspect({ business: '   ', name: 'Rafael' })).toBe('Rafael');
+    });
+
+    it('sem nada, nao devolve string vazia', () => {
+      expect(rotuloDoProspect({})).toBe('Sem identificacao');
+    });
+  });
+
+  describe('create — pelo menos um identificador', () => {
+    function build() {
+      const prisma = {
+        prospect: {
+          create: jest.fn().mockImplementation(({ data }: { data: unknown }) =>
+            Promise.resolve({ id: 'p1', ...(data as object) }),
+          ),
+        },
+      };
+      return new ProspectsService(prisma as never, {} as never, {} as never);
+    }
+
+    it('aceita so com o @ do perfil, sem nome', async () => {
+      const svc = build();
+      await expect(
+        svc.create('org', 'u1', { handle: '@barbeariaimperial' }),
+      ).resolves.toBeTruthy();
+    });
+
+    it('aceita so com telefone', async () => {
+      const svc = build();
+      await expect(svc.create('org', 'u1', { phone: '19999998888' })).resolves.toBeTruthy();
+    });
+
+    it('aceita so com o negocio', async () => {
+      const svc = build();
+      await expect(
+        svc.create('org', 'u1', { business: 'Barbearia Imperial' }),
+      ).resolves.toBeTruthy();
+    });
+
+    it('recusa quando NADA identifica o prospect', async () => {
+      // Sem isto o card nasceria em branco e ninguem saberia de quem e.
+      const svc = build();
+      await expect(svc.create('org', 'u1', { niche: 'Barbearia' })).rejects.toThrow(
+        /identificador/i,
+      );
+    });
+
+    it('recusa campos so com espaco', async () => {
+      const svc = build();
+      await expect(
+        svc.create('org', 'u1', { name: '  ', business: '', phone: '   ' }),
+      ).rejects.toThrow(/identificador/i);
+    });
+  });
 
   // ─── Carimbos monotônicos ────────────────────────────────
 

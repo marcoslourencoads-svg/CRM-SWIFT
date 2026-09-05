@@ -18,6 +18,7 @@ import {
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
+  CAMPOS_DE_IDENTIFICACAO,
   CHANNEL_META,
   OUTCOME_META,
   paraInstante,
@@ -48,9 +49,10 @@ const EMPTY = {
 /**
  * Captura rápida.
  *
- * Só o nome é obrigatório — prospecção acontece em rajada, e um
- * formulário longo faz o operador voltar para o bloco de notas. O resto
- * se completa depois, na ficha.
+ * Nenhum campo é obrigatório sozinho: basta UM identificador — nome,
+ * negócio, @, telefone ou e-mail. Em prospecção fria muitas vezes só se
+ * tem o perfil, e exigir o nome levava o operador a inventar um só para
+ * conseguir salvar. O resto se completa depois, na ficha.
  */
 export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: Props) {
   const [form, setForm] = useState(EMPTY);
@@ -82,15 +84,21 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  // Basta um identificador. A mesma regra vale no servidor; aqui ela
+  // existe para avisar antes de o operador perder o que digitou.
+  const temIdentificacao = CAMPOS_DE_IDENTIFICACAO.some((campo) =>
+    (form[campo as keyof typeof EMPTY] ?? '').trim(),
+  );
+
   async function handleSubmit() {
-    if (!form.name.trim()) {
-      toast.error('O nome é obrigatório');
+    if (!temIdentificacao) {
+      toast.error('Preencha ao menos um: nome, negócio, @, telefone ou e-mail');
       return;
     }
     setSubmitting(true);
     try {
       await api.post('/prospects', {
-        name: form.name.trim(),
+        ...(form.name.trim() ? { name: form.name.trim() } : {}),
         ...(form.business.trim() ? { business: form.business.trim() } : {}),
         ...(form.phone.trim() ? { phone: form.phone.trim() } : {}),
         ...(form.email.trim() ? { email: form.email.trim() } : {}),
@@ -131,13 +139,15 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
         <h2 className="text-sm font-semibold uppercase tracking-wide">Novo prospect</h2>
       </div>
       <p className="mb-4 text-xs text-muted-foreground">
-        Só o nome já basta pra começar. O resto você completa depois, na ficha.
+        Basta um jeito de identificar — nome, negócio, @, telefone ou e-mail.
+        O resto você completa depois, na ficha.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="np-name" className="text-xs">
-            Nome do contato
+            Nome do contato{' '}
+            <span className="font-normal text-muted-foreground">(opcional)</span>
           </Label>
           <Input
             id="np-name"
@@ -366,7 +376,11 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
         <Button variant="outline" size="sm" onClick={onCancel} disabled={submitting}>
           Cancelar
         </Button>
-        <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+        <Button
+          size="sm"
+          onClick={handleSubmit}
+          disabled={submitting || !temIdentificacao}
+        >
           {submitting ? 'Adicionando...' : 'Adicionar prospect'}
         </Button>
       </div>
