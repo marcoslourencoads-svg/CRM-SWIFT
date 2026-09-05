@@ -73,6 +73,22 @@ function hojeLocal() {
 async function main() {
   console.log(`Verificando melhorias em ${API}`);
 
+  // Sonda de deploy: /prospect-notes NAO pode ser confundida com outra
+  // rota. Ja /prospects/agenda casa com GET /prospects/:id (id="agenda")
+  // e devolve 401 pelo guard mesmo no codigo ANTIGO — usar essa como
+  // prova de deploy da falso positivo. Aprendido na pratica.
+  titulo('0. A versão no ar tem as melhorias?');
+  const sonda = await fetch(`${API}/prospect-notes/x`, { method: 'PATCH' });
+  conferir(
+    'rota do diário existe (401, não 404)',
+    sonda.status === 401,
+    `HTTP ${sonda.status}`,
+  );
+  if (sonda.status === 404) {
+    console.log('  A versao publicada ainda e a antiga. Pare aqui.');
+    process.exit(1);
+  }
+
   titulo('0. Organização nova');
   const selo = Date.now();
   const registro = await req('POST', '/auth/register', {
