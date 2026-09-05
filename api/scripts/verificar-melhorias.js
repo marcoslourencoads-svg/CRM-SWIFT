@@ -227,6 +227,50 @@ async function main() {
   conferir('remover some da lista', depois.notes.length === 1);
   conferir('e não apaga a outra', depois.notes[0].content.startsWith('Agendou'));
 
+  // ── Nome opcional ───────────────────────────────────────────
+  titulo('5. Nome deixou de ser obrigatório');
+
+  const soPerfil = await req('POST', '/prospects', {
+    handle: '@barbeariaimperial',
+    niche: 'Barbearia',
+  });
+  conferir('cadastra só com o @ do perfil', !!soPerfil.id);
+  conferir('nome fica vazio, não inventado', soPerfil.name === null, `veio ${soPerfil.name}`);
+  conferir('handle normalizado', soPerfil.handle === 'barbeariaimperial');
+
+  const soTelefone = await req('POST', '/prospects', { phone: '(19) 99999-8888' });
+  conferir('cadastra só com telefone', !!soTelefone.id);
+
+  const soNegocio = await req('POST', '/prospects', { business: 'Pizzaria do Ze' });
+  conferir('cadastra só com o negócio', !!soNegocio.id);
+
+  let recusou = null;
+  try {
+    await req('POST', '/prospects', { niche: 'Barbearia' });
+  } catch (e) {
+    recusou = e.message;
+  }
+  conferir(
+    'recusa quando NADA identifica o prospect',
+    /400/.test(recusou ?? '') && /identificador/i.test(recusou ?? ''),
+    recusou ? 'recusado' : 'ACEITOU — card nasceria em branco',
+  );
+
+  // O rótulo tem que achar algo para mostrar em cada caso.
+  const convertido = await req('POST', `/prospects/${soPerfil.id}/convert`, {
+    pipelineId: (await req('GET', '/pipelines'))[0].id,
+  });
+  conferir(
+    'sem nome, o lead usa o @ como título',
+    convertido.lead.title === '@barbeariaimperial',
+    convertido.lead.title,
+  );
+  conferir(
+    'e o contato criado também',
+    convertido.lead.contact?.name === '@barbeariaimperial',
+    convertido.lead.contact?.name,
+  );
+
   // ── Resultado ───────────────────────────────────────────────
   titulo('Resultado');
   console.log(`  ${checks - falhas}/${checks} conferências passaram`);

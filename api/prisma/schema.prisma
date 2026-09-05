@@ -1085,7 +1085,12 @@ model Prospect {
   // Identidade — `name` é a pessoa, `business` é o negócio.
   // O card lidera pelo negócio ("Estrela dos Pagos") e usa o nicho
   // como subtítulo ("Churrascaria/Restaurante").
-  name       String
+  //
+  // NENHUM destes é obrigatório sozinho: em prospecção fria muitas vezes
+  // só se tem o @ do perfil, ou só o telefone. O serviço exige que pelo
+  // menos UM identificador venha preenchido — senão o card nasceria em
+  // branco e ninguém saberia de quem se trata.
+  name       String?
   business   String?
   handle     String?
   profileUrl String? @map("profile_url")

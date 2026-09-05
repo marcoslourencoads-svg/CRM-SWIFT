@@ -50,6 +50,37 @@ const STAGE_STAMP: Partial<Record<ProspectStage, string>> = {
 const DEFAULT_CADENCE = [2, 4, 7];
 
 const TERMINAL_STAGES: ProspectStage[] = ['WON', 'LOST', 'DISQUALIFIED'];
+
+/**
+ * Campos que servem para reconhecer de quem se trata. Basta UM.
+ *
+ * O nome deixou de ser obrigatorio porque em prospeccao fria muitas
+ * vezes so se tem o @ do perfil, ou o telefone de uma indicacao.
+ */
+const IDENTIFICADORES = ['name', 'business', 'handle', 'phone', 'email'] as const;
+
+/**
+ * Como o prospect aparece na tela e nas notificacoes.
+ *
+ * A ordem e a mesma do card: o negocio lidera, a pessoa vem depois, e o
+ * @ / telefone / e-mail entram quando nao ha nenhum dos dois.
+ */
+export function rotuloDoProspect(p: {
+  name?: string | null;
+  business?: string | null;
+  handle?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}): string {
+  return (
+    p.business?.trim() ||
+    p.name?.trim() ||
+    (p.handle?.trim() ? `@${p.handle.trim()}` : '') ||
+    p.phone?.trim() ||
+    p.email?.trim() ||
+    'Sem identificacao'
+  );
+}
 const REPLY_OUTCOMES: TouchOutcome[] = ['REPLIED_POSITIVE', 'REPLIED_NEGATIVE'];
 
 const PROSPECT_INCLUDE = {
@@ -209,6 +240,18 @@ export class ProspectsService {
 
   async create(orgId: string, userId: string, dto: CreateProspectDto) {
     const handle = this.normalizeHandle(dto.handle, dto.profileUrl);
+
+    // Sem nenhum identificador o card nasceria em branco e ninguem
+    // saberia de quem se trata — por isso a regra existe, mesmo com o
+    // nome tendo deixado de ser obrigatorio.
+    const temIdentificacao = IDENTIFICADORES.some((campo) =>
+      campo === 'handle' ? !!handle : !!dto[campo]?.trim(),
+    );
+    if (!temIdentificacao) {
+      throw new BadRequestException(
+        'Informe ao menos um identificador: nome, negocio, @ do Instagram, telefone ou e-mail',
+      );
+    }
 
     const criado = await this.prisma.prospect.create({
       data: {
@@ -524,7 +567,7 @@ export class ProspectsService {
       contact = await this.prisma.contact.create({
         data: {
           organizationId: orgId,
-          name: prospect.name,
+          name: rotuloDoProspect(prospect),
           email: prospect.email,
           phone: prospect.phone,
         },
@@ -546,7 +589,7 @@ export class ProspectsService {
         organizationId: orgId,
         pipelineId: dto.pipelineId,
         statusId,
-        title: dto.title || prospect.business || prospect.name,
+        title: dto.title || rotuloDoProspect(prospect),
         estimatedValue: dto.estimatedValue ?? prospect.dealValue ?? 0,
         assigneeId: dto.assigneeId ?? prospect.ownerId ?? undefined,
         contactId: contact.id,

@@ -279,13 +279,31 @@ describe('ProspectImportService', () => {
       expect(row.respondedAt).toBeNull();
     });
 
-    it('usa o perfil como nome quando a planilha não tem coluna de nome', async () => {
-      await service.importCsv(
+    it('importa sem nome quando a planilha só tem o perfil', async () => {
+      // O nome deixou de ser obrigatorio. Antes o perfil era copiado
+      // para o campo nome, o que inventava um dado que a planilha nao
+      // tinha; agora o handle fica no lugar dele e o nome fica vazio.
+      const result = await service.importCsv(
         'org-1',
         'user-1',
         csv('Não,https://www.instagram.com/arq.burguer/,25/08/2026,Sim,,,,,,,,,,,,,'),
       );
-      expect(created[0].name).toBe('arq.burguer');
+
+      expect(result.imported).toBe(1);
+      expect(created[0].name).toBeNull();
+      expect(created[0].handle).toBe('arq.burguer');
+    });
+
+    it('recusa a linha sem NENHUM identificador', async () => {
+      const result = await service.importCsv(
+        'org-1',
+        'user-1',
+        csv('Sim,,25/08/2026,Sim,,,,,,,,,,,,,'),
+      );
+
+      expect(result.imported).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.errors[0].message).toMatch(/telefone|e-mail|perfil/i);
     });
 
     it('reconstrói toda a cadência quando os FUPs foram feitos', async () => {

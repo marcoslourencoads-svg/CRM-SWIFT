@@ -15,9 +15,13 @@ import { ProspectStage, ProspectChannel, TouchOutcome } from '@prisma/client';
 // Só o nome é obrigatório: a captura na rua precisa ser de um campo só,
 // o resto se completa depois na ficha.
 export class CreateProspectDto {
+  // Opcional de proposito: em prospeccao fria muitas vezes so se tem o @
+  // do perfil ou o telefone. A regra de "pelo menos um identificador" e
+  // aplicada no servico, porque envolve varios campos ao mesmo tempo e
+  // nao cabe num decorator de campo unico.
   @IsString()
-  @IsNotEmpty()
-  name!: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
   @IsOptional()

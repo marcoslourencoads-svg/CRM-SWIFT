@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { rotuloDoProspect } from '../prospects.service';
 
 /**
  * Lembrete de compromisso da prospecção: roda a cada 5 minutos.
@@ -46,6 +47,9 @@ export class ProspectReminderScheduler {
         ownerId: true,
         name: true,
         business: true,
+        handle: true,
+        phone: true,
+        email: true,
         nextActionAt: true,
         touchCount: true,
       },
@@ -69,7 +73,9 @@ export class ProspectReminderScheduler {
       });
       if (jaAvisado) continue;
 
-      const quem = p.business?.trim() || p.name;
+      // Mesmo rotulo do card. Sem isto, um prospect cadastrado so com o
+      // @ geraria a notificacao "Retornar para  as 14h".
+      const quem = rotuloDoProspect(p);
       const hora = p.nextActionAt!.toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit',
