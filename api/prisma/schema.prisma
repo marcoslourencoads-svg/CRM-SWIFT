@@ -23,19 +23,19 @@ enum InvitationStatus {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  logoUrl   String?  @map("logo_url")
-  settings  Json     @default("{}")
-  industry      String?  @map("industry")
-  teamSize      String?  @map("team_size")
-  mainGoal      String?  @map("main_goal")
-  leadSourcesInitial String[] @default([]) @map("lead_sources_initial")
-  onboardedAt   DateTime? @map("onboarded_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id                 String    @id @default(cuid())
+  name               String
+  slug               String    @unique
+  logoUrl            String?   @map("logo_url")
+  settings           Json      @default("{}")
+  industry           String?   @map("industry")
+  teamSize           String?   @map("team_size")
+  mainGoal           String?   @map("main_goal")
+  leadSourcesInitial String[]  @default([]) @map("lead_sources_initial")
+  onboardedAt        DateTime? @map("onboarded_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
 
   memberships       Membership[]
   invitations       Invitation[]
@@ -273,17 +273,17 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  memberships            Membership[]
-  assignedLeads          Lead[]                   @relation("Assignee")
-  activities             Activity[]               @relation("ActivityUser")
-  notes                  Note[]                   @relation("NoteUser")
-  assignedTasks          LeadTask[]               @relation("TaskAssignee")
-  createdTasks           LeadTask[]               @relation("TaskCreator")
-  attachments            Attachment[]             @relation("AttachmentUser")
-  notifications          Notification[]           @relation("NotificationRecipient")
+  memberships             Membership[]
+  assignedLeads           Lead[]                   @relation("Assignee")
+  activities              Activity[]               @relation("ActivityUser")
+  notes                   Note[]                   @relation("NoteUser")
+  assignedTasks           LeadTask[]               @relation("TaskAssignee")
+  createdTasks            LeadTask[]               @relation("TaskCreator")
+  attachments             Attachment[]             @relation("AttachmentUser")
+  notifications           Notification[]           @relation("NotificationRecipient")
   notificationPreferences NotificationPreference[] @relation("NotificationPreference")
-  ownedProspects         Prospect[]               @relation("ProspectOwner")
-  prospectTouches        ProspectTouch[]          @relation("ProspectToucher")
+  ownedProspects          Prospect[]               @relation("ProspectOwner")
+  prospectTouches         ProspectTouch[]          @relation("ProspectToucher")
 
   @@map("users")
 }
@@ -335,12 +335,12 @@ model Pipeline {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  statuses             PipelineStatus[]
-  transitionRules      TransitionRule[]
-  leads                Lead[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  statuses               PipelineStatus[]
+  transitionRules        TransitionRule[]
+  leads                  Lead[]
   customFieldDefinitions CustomFieldDefinition[]
-  memberships          PipelineMembership[]
+  memberships            PipelineMembership[]
 
   @@index([organizationId, deletedAt])
   @@map("pipelines")
@@ -466,23 +466,23 @@ model Lead {
   updatedAt           DateTime        @updatedAt @map("updated_at")
   deletedAt           DateTime?       @map("deleted_at")
 
-  sourceId            String?         @map("source_id")
+  sourceId String? @map("source_id")
 
-  pipeline         Pipeline          @relation(fields: [pipelineId], references: [id])
-  status           PipelineStatus    @relation(fields: [statusId], references: [id])
-  contact          Contact?          @relation(fields: [contactId], references: [id])
-  company          Company?          @relation(fields: [companyId], references: [id])
-  assignee         User?             @relation("Assignee", fields: [assigneeId], references: [id])
-  source           LeadSource?       @relation(fields: [sourceId], references: [id])
+  pipeline          Pipeline           @relation(fields: [pipelineId], references: [id])
+  status            PipelineStatus     @relation(fields: [statusId], references: [id])
+  contact           Contact?           @relation(fields: [contactId], references: [id])
+  company           Company?           @relation(fields: [companyId], references: [id])
+  assignee          User?              @relation("Assignee", fields: [assigneeId], references: [id])
+  source            LeadSource?        @relation(fields: [sourceId], references: [id])
   customFieldValues CustomFieldValue[]
-  tags             LeadTag[]
-  activities       Activity[]
-  notes            Note[]
-  tasks            LeadTask[]
-  attachments      Attachment[]
-  tracking         LeadTracking?
-  score            LeadScore?
-  metaCapiEvents   MetaCapiEvent[]
+  tags              LeadTag[]
+  activities        Activity[]
+  notes             Note[]
+  tasks             LeadTask[]
+  attachments       Attachment[]
+  tracking          LeadTracking?
+  score             LeadScore?
+  metaCapiEvents    MetaCapiEvent[]
 
   @@index([organizationId, pipelineId, statusId, deletedAt])
   @@index([organizationId, assigneeId, deletedAt])
@@ -513,20 +513,20 @@ enum CustomFieldType {
 }
 
 model CustomFieldDefinition {
-  id             String          @id @default(cuid())
-  pipelineId     String          @map("pipeline_id")
-  name           String
-  slug           String
-  type           CustomFieldType
-  options        Json?
-  defaultValue   String?         @map("default_value")
-  isRequired     Boolean         @default(false) @map("is_required")
-  isVisibleOnCard Boolean        @default(false) @map("is_visible_on_card")
-  isFilterable   Boolean         @default(true) @map("is_filterable")
-  position       Int             @default(0)
-  validationRules Json?          @map("validation_rules")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  id              String          @id @default(cuid())
+  pipelineId      String          @map("pipeline_id")
+  name            String
+  slug            String
+  type            CustomFieldType
+  options         Json?
+  defaultValue    String?         @map("default_value")
+  isRequired      Boolean         @default(false) @map("is_required")
+  isVisibleOnCard Boolean         @default(false) @map("is_visible_on_card")
+  isFilterable    Boolean         @default(true) @map("is_filterable")
+  position        Int             @default(0)
+  validationRules Json?           @map("validation_rules")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
 
   pipeline Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   values   CustomFieldValue[]
@@ -537,16 +537,16 @@ model CustomFieldDefinition {
 }
 
 model CustomFieldValue {
-  id                String   @id @default(cuid())
-  leadId            String   @map("lead_id")
-  fieldDefinitionId String   @map("field_definition_id")
-  textValue         String?  @map("text_value")
-  numberValue       Float?   @map("number_value")
+  id                String    @id @default(cuid())
+  leadId            String    @map("lead_id")
+  fieldDefinitionId String    @map("field_definition_id")
+  textValue         String?   @map("text_value")
+  numberValue       Float?    @map("number_value")
   dateValue         DateTime? @map("date_value")
-  booleanValue      Boolean? @map("boolean_value")
-  jsonValue         Json?    @map("json_value")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  booleanValue      Boolean?  @map("boolean_value")
+  jsonValue         Json?     @map("json_value")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   lead            Lead                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   fieldDefinition CustomFieldDefinition @relation(fields: [fieldDefinitionId], references: [id], onDelete: Cascade)
@@ -677,18 +677,18 @@ enum LeadTaskType {
 }
 
 model LeadTask {
-  id          String    @id @default(cuid())
-  leadId      String    @map("lead_id")
-  assigneeId  String    @map("assignee_id")
-  createdBy   String    @map("created_by")
+  id          String       @id @default(cuid())
+  leadId      String       @map("lead_id")
+  assigneeId  String       @map("assignee_id")
+  createdBy   String       @map("created_by")
   title       String
   description String?
   type        LeadTaskType @default(TASK)
-  dueDate     DateTime? @map("due_date")
-  completedAt DateTime? @map("completed_at")
+  dueDate     DateTime?    @map("due_date")
+  completedAt DateTime?    @map("completed_at")
   priority    LeadPriority @default(MEDIUM)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
 
   lead     Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   assignee User @relation("TaskAssignee", fields: [assigneeId], references: [id])
@@ -719,24 +719,24 @@ model Attachment {
 // ─── UTM Tracking ───────────────────────────────────────────
 
 model LeadTracking {
-  id               String   @id @default(cuid())
-  leadId           String   @unique @map("lead_id")
-  utmSource        String?  @map("utm_source")
-  utmMedium        String?  @map("utm_medium")
-  utmCampaign      String?  @map("utm_campaign")
-  utmTerm          String?  @map("utm_term")
-  utmContent       String?  @map("utm_content")
-  referrerUrl      String?  @map("referrer_url")
-  landingPage      String?  @map("landing_page")
-  gclid            String?
-  fbclid           String?
-  fbc              String?
-  fbp              String?
-  metaLeadId       String?  @map("meta_lead_id")
-  clickedAt        DateTime? @map("clicked_at")
-  ip               String?
-  userAgent        String?  @map("user_agent")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id          String    @id @default(cuid())
+  leadId      String    @unique @map("lead_id")
+  utmSource   String?   @map("utm_source")
+  utmMedium   String?   @map("utm_medium")
+  utmCampaign String?   @map("utm_campaign")
+  utmTerm     String?   @map("utm_term")
+  utmContent  String?   @map("utm_content")
+  referrerUrl String?   @map("referrer_url")
+  landingPage String?   @map("landing_page")
+  gclid       String?
+  fbclid      String?
+  fbc         String?
+  fbp         String?
+  metaLeadId  String?   @map("meta_lead_id")
+  clickedAt   DateTime? @map("clicked_at")
+  ip          String?
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -949,17 +949,17 @@ model CustomKpi {
 }
 
 model SnapshotDaily {
-  id               String   @id @default(cuid())
-  organizationId   String   @map("organization_id")
-  pipelineId       String   @map("pipeline_id")
-  date             DateTime @db.Date
-  statusId         String   @map("status_id")
-  leadCount        Int      @default(0) @map("lead_count")
-  totalValue       Int      @default(0) @map("total_value")
-  newLeads         Int      @default(0) @map("new_leads")
-  wonLeads         Int      @default(0) @map("won_leads")
-  lostLeads        Int      @default(0) @map("lost_leads")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  pipelineId     String   @map("pipeline_id")
+  date           DateTime @db.Date
+  statusId       String   @map("status_id")
+  leadCount      Int      @default(0) @map("lead_count")
+  totalValue     Int      @default(0) @map("total_value")
+  newLeads       Int      @default(0) @map("new_leads")
+  wonLeads       Int      @default(0) @map("won_leads")
+  lostLeads      Int      @default(0) @map("lost_leads")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   @@unique([organizationId, pipelineId, statusId, date])
   @@index([date])
@@ -1004,7 +1004,6 @@ model WebhookLog {
   @@index([webhookId, createdAt(sort: Desc)])
   @@map("webhook_logs")
 }
-
 
 // ─── Prospecção Ativa (Outbound) ────────────────────────────
 
@@ -1076,54 +1075,57 @@ model ProspectApproach {
 }
 
 model Prospect {
-  id             String          @id @default(cuid())
-  organizationId String          @map("organization_id")
-  listId         String?         @map("list_id")
-  ownerId        String?         @map("owner_id")
+  id             String  @id @default(cuid())
+  organizationId String  @map("organization_id")
+  listId         String? @map("list_id")
+  ownerId        String? @map("owner_id")
 
-  // Identidade
-  name           String
-  handle         String?
-  profileUrl     String?         @map("profile_url")
-  phone          String?
-  email          String?
-  city           String?
+  // Identidade — `name` é a pessoa, `business` é o negócio.
+  // O card lidera pelo negócio ("Estrela dos Pagos") e usa o nicho
+  // como subtítulo ("Churrascaria/Restaurante").
+  name       String
+  business   String?
+  handle     String?
+  profileUrl String? @map("profile_url")
+  phone      String?
+  email      String?
+  city       String?
 
   // Qualificação (ICP)
-  hasAds         Boolean?        @map("has_ads")
-  niche          String?
-  followers      Int?
+  hasAds    Boolean? @map("has_ads")
+  niche     String?
+  followers Int?
 
   // Estado
-  stage          ProspectStage   @default(NEW)
-  channel        ProspectChannel @default(INSTAGRAM)
+  stage   ProspectStage   @default(NEW)
+  channel ProspectChannel @default(INSTAGRAM)
 
   // Cadência
-  touchCount     Int             @default(0) @map("touch_count")
-  lastTouchAt    DateTime?       @map("last_touch_at")
-  nextActionAt   DateTime?       @map("next_action_at")
+  touchCount   Int       @default(0) @map("touch_count")
+  lastTouchAt  DateTime? @map("last_touch_at")
+  nextActionAt DateTime? @map("next_action_at")
 
   // Carimbos por etapa — base do funil por coorte
-  firstContactedAt DateTime?     @map("first_contacted_at")
-  respondedAt      DateTime?     @map("responded_at")
-  meetingSetAt     DateTime?     @map("meeting_set_at")
-  meetingHeldAt    DateTime?     @map("meeting_held_at")
-  wonAt            DateTime?     @map("won_at")
-  lostAt           DateTime?     @map("lost_at")
+  firstContactedAt DateTime? @map("first_contacted_at")
+  respondedAt      DateTime? @map("responded_at")
+  meetingSetAt     DateTime? @map("meeting_set_at")
+  meetingHeldAt    DateTime? @map("meeting_held_at")
+  wonAt            DateTime? @map("won_at")
+  lostAt           DateTime? @map("lost_at")
 
   // Resultado
-  dealValue      Int             @default(0) @map("deal_value")
-  lostReasonId   String?         @map("lost_reason_id")
-  lostNote       String?         @map("lost_note")
+  dealValue    Int     @default(0) @map("deal_value")
+  lostReasonId String? @map("lost_reason_id")
+  lostNote     String? @map("lost_note")
 
   // Conversão para o pipeline de vendas
-  leadId         String?         @unique @map("lead_id")
-  contactId      String?         @map("contact_id")
+  leadId    String? @unique @map("lead_id")
+  contactId String? @map("contact_id")
 
-  notes          String?
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  deletedAt      DateTime?       @map("deleted_at")
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   list    ProspectList?   @relation(fields: [listId], references: [id], onDelete: SetNull)
   owner   User?           @relation("ProspectOwner", fields: [ownerId], references: [id])

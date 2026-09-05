@@ -17,6 +17,7 @@ import { PrismaService } from '../../prisma/prisma.service';
  * - 5 motivos de perda
  * - 3 templates WhatsApp
  * - 1 canal WhatsApp manual
+ * - Prospecção ativa: origem OUTBOUND, lista padrão e 3 abordagens
  */
 @Injectable()
 export class OrganizationBootstrapService {
@@ -43,6 +44,7 @@ export class OrganizationBootstrapService {
     await this.ensureLostReasons(orgId, tx);
     await this.ensureWhatsappTemplates(orgId, tx);
     await this.ensureDefaultChannel(orgId, tx);
+    await this.ensureProspecting(orgId, ownerId, tx);
     if (ownerId) {
       await this.ensureTeamChatGeneral(orgId, ownerId, tx);
     }
@@ -268,4 +270,72 @@ export class OrganizationBootstrapService {
       },
     });
   }
+
+  // ---------- Prospecção ativa ----------
+
+  private async ensureProspecting(
+    orgId: string,
+    ownerId: string | undefined,
+    tx: Prisma.TransactionClient,
+  ) {
+    // Checado pelo TIPO, não pela existência de qualquer origem: as orgs
+    // antigas já têm lead sources semeadas, mas nenhuma OUTBOUND — e é
+    // ela que a conversão de prospect em lead procura.
+    const outbound = await tx.leadSource.findFirst({
+      where: { organizationId: orgId, type: 'OUTBOUND' },
+    });
+    if (!outbound) {
+      await tx.leadSource.create({
+        data: {
+          organizationId: orgId,
+          name: 'Prospecção ativa',
+          type: 'OUTBOUND',
+          color: '#F59E0B',
+        },
+      });
+    }
+
+    const existingList = await tx.prospectList.findFirst({
+      where: { organizationId: orgId },
+    });
+    if (!existingList) {
+      await tx.prospectList.create({
+        data: {
+          organizationId: orgId,
+          name: 'Prospecção geral',
+          description: 'Lista padrão. A cadência abaixo agenda os follow-ups sozinha.',
+          // Abordagem, +2 dias, +4 dias, +7 dias = 4 toques no total.
+          cadenceDays: [2, 4, 7],
+          createdBy: ownerId,
+        },
+      });
+    }
+
+    const existingApproach = await tx.prospectApproach.findFirst({
+      where: { organizationId: orgId },
+    });
+    if (existingApproach) return;
+
+    const defs = [
+      {
+        name: 'Elogio + pergunta',
+        body: 'Elogia algo específico do perfil e termina com uma pergunta aberta sobre a operação.',
+      },
+      {
+        name: 'Diagnóstico gratuito',
+        body: 'Oferece uma análise rápida e sem custo do que está travando as vendas.',
+      },
+      {
+        name: 'Prova social do nicho',
+        body: 'Cita um resultado de um cliente do mesmo segmento e pergunta se faz sentido conversar.',
+      },
+    ];
+
+    for (let i = 0; i < defs.length; i++) {
+      await tx.prospectApproach.create({
+        data: { organizationId: orgId, ...defs[i], position: i },
+      });
+    }
+  }
+
 }
