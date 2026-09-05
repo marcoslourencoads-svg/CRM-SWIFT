@@ -3,8 +3,11 @@ WORKDIR /app
 
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-COPY package.json ./
-RUN npm install
+# Com o lock: npm ci instala as versoes exatas que passam localmente.
+# Sem ele, cada build resolvia versoes novas do registry e um deploy que
+# passava em junho quebrava em setembro sem ninguem mexer no codigo.
+COPY package.json package-lock.json ./
+RUN npm ci
 
 COPY . .
 
