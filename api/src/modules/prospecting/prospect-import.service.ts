@@ -199,7 +199,19 @@ export class ProspectImportService {
             lostAt: stamps.lostAt,
             dealValue: this.moneyFrom(row.dealValue),
             lostNote: row.lostNote?.trim() || null,
-            notes: row.notes?.trim() || null,
+            // A coluna de observacoes da planilha vira a primeira
+            // entrada do diario, carimbada com a etapa deduzida.
+            ...(row.notes?.trim()
+              ? {
+                  notes: {
+                    create: {
+                      userId,
+                      stage: stamps.stage,
+                      content: row.notes.trim(),
+                    },
+                  },
+                }
+              : {}),
             touches: {
               create: touches.map((t, i) => ({
                 userId,

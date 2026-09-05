@@ -15,6 +15,7 @@ import {
   ChangeStageDto,
   ConvertProspectDto,
   BulkProspectDto,
+  UpsertProspectNoteDto,
 } from './dto/prospect.dto';
 
 // Ordem do funil. É esta escala que impede o estado incoerente da
@@ -57,6 +58,11 @@ const PROSPECT_INCLUDE = {
   touches: {
     orderBy: { sequence: 'asc' as const },
     include: { approach: { select: { id: true, name: true } } },
+  },
+  notes: {
+    where: { deletedAt: null },
+    orderBy: { createdAt: 'desc' as const },
+    include: { user: { select: { id: true, name: true } } },
   },
 };
 
@@ -127,18 +133,23 @@ export class ProspectsService {
 
   // A fila do dia. É a tela que a planilha nunca teve: em vez de ler
   // 11 colunas para descobrir quem está pendente, o nextActionAt diz.
-  async getQueue(orgId: string, ownerId?: string) {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      23,
-      59,
-      59,
-      999,
+  async getQueue(orgId: string, ownerId?: string, tzOffsetMin?: number) {
+    // "Hoje" precisa ser o hoje de QUEM OLHA, nao o do servidor. Em
+    // producao a API roda em UTC; para um usuario em UTC-3, das 21h a
+    // meia-noite o servidor ja virou o dia e o compromisso de amanha
+    // apareceria como sendo de hoje. O front manda o proprio offset
+    // (Date.getTimezoneOffset, em minutos); sem ele, cai no servidor.
+    const offset = tzOffsetMin ?? new Date().getTimezoneOffset();
+    const agoraLocal = new Date(Date.now() - offset * 60 * 1000);
+
+    const startOfToday = new Date(
+      Date.UTC(
+        agoraLocal.getUTCFullYear(),
+        agoraLocal.getUTCMonth(),
+        agoraLocal.getUTCDate(),
+      ) + offset * 60 * 1000,
     );
+    const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     const base: Prisma.ProspectWhereInput = {
       organizationId: orgId,
@@ -196,9 +207,10 @@ export class ProspectsService {
 
   // ─── Escrita ────────────────────────────────────────────────
 
-  async create(orgId: string, dto: CreateProspectDto) {
+  async create(orgId: string, userId: string, dto: CreateProspectDto) {
     const handle = this.normalizeHandle(dto.handle, dto.profileUrl);
-    return this.prisma.prospect.create({
+
+    const criado = await this.prisma.prospect.create({
       data: {
         organizationId: orgId,
         name: dto.name,
@@ -213,11 +225,98 @@ export class ProspectsService {
         followers: dto.followers,
         channel: dto.channel ?? 'INSTAGRAM',
         listId: dto.listId,
-        ownerId: dto.ownerId,
+        ownerId: dto.ownerId ?? userId,
         nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : null,
-        notes: dto.notes,
+        // A observação do cadastro vira a primeira entrada do diário.
+        ...(dto.observacao?.trim()
+          ? {
+              notes: {
+                create: {
+                  userId,
+                  stage: 'NEW' as ProspectStage,
+                  content: dto.observacao.trim(),
+                },
+              },
+            }
+          : {}),
       },
       include: PROSPECT_INCLUDE,
+    });
+
+    // "Já abordei este": registra o primeiro toque junto do cadastro, em
+    // vez de obrigar a abrir a ficha logo em seguida só para marcar isso.
+    // Reusa registerTouch para a cadência e os carimbos saírem iguais aos
+    // de um toque registrado à mão.
+    if (dto.jaAbordado) {
+      return this.registerTouch(orgId, userId, criado.id, {
+        outcome: dto.primeiroToqueResultado ?? 'NO_REPLY',
+        approachId: dto.approachId,
+        sentAt: dto.abordadoEm,
+        // Data escolhida no cadastro vence a cadência: se o operador já
+        // combinou o retorno, é essa a data que vale.
+        ...(dto.nextActionAt ? { nextActionAt: dto.nextActionAt } : {}),
+      });
+    }
+
+    return criado;
+  }
+
+  // ─── Diário de bordo ────────────────────────────────────────
+
+  // A etapa é copiada no momento da escrita: avançar depois não pode
+  // reescrever em que ponto a observação foi feita.
+  async addNote(orgId: string, userId: string, id: string, dto: UpsertProspectNoteDto) {
+    const prospect = await this.findOne(orgId, id);
+    await this.prisma.prospectNote.create({
+      data: {
+        prospectId: prospect.id,
+        userId,
+        stage: prospect.stage,
+        content: dto.content.trim(),
+      },
+    });
+    return this.findOne(orgId, id);
+  }
+
+  async updateNote(orgId: string, noteId: string, dto: UpsertProspectNoteDto) {
+    const note = await this.prisma.prospectNote.findFirst({
+      where: { id: noteId, deletedAt: null, prospect: { organizationId: orgId } },
+    });
+    if (!note) throw new NotFoundException('Anotacao nao encontrada');
+
+    return this.prisma.prospectNote.update({
+      where: { id: noteId },
+      data: { content: dto.content.trim() },
+      include: { user: { select: { id: true, name: true } } },
+    });
+  }
+
+  async removeNote(orgId: string, noteId: string) {
+    const note = await this.prisma.prospectNote.findFirst({
+      where: { id: noteId, deletedAt: null, prospect: { organizationId: orgId } },
+    });
+    if (!note) throw new NotFoundException('Anotacao nao encontrada');
+
+    await this.prisma.prospectNote.update({
+      where: { id: noteId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  // Compromissos com hora marcada dentro de uma janela — o que alimenta
+  // o calendário.
+  async getAgenda(orgId: string, from: string, to: string, ownerId?: string) {
+    return this.prisma.prospect.findMany({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+        stage: { notIn: TERMINAL_STAGES },
+        nextActionAt: { gte: new Date(from), lte: new Date(to) },
+        ...(ownerId ? { ownerId } : {}),
+      },
+      include: PROSPECT_INCLUDE,
+      orderBy: { nextActionAt: 'asc' },
+      take: 500,
     });
   }
 
@@ -241,7 +340,6 @@ export class ProspectsService {
         ...(dto.listId !== undefined ? { listId: dto.listId || null } : {}),
         ...(dto.ownerId !== undefined ? { ownerId: dto.ownerId || null } : {}),
         ...(dto.dealValue !== undefined ? { dealValue: dto.dealValue } : {}),
-        ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         ...(dto.nextActionAt !== undefined
           ? { nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : null }
           : {}),

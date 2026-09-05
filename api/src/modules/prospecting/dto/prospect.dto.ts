@@ -72,9 +72,29 @@ export class CreateProspectDto {
   @IsOptional()
   nextActionAt?: string;
 
+  // Observação escrita na hora do cadastro. Vira a primeira entrada do
+  // diário de bordo, com a etapa carimbada.
   @IsString()
   @IsOptional()
-  notes?: string;
+  observacao?: string;
+
+  // "Já abordei este": registra o primeiro toque junto com o cadastro,
+  // para não precisar abrir a ficha em seguida só para marcar isso.
+  @IsBoolean()
+  @IsOptional()
+  jaAbordado?: boolean;
+
+  @IsEnum(TouchOutcome)
+  @IsOptional()
+  primeiroToqueResultado?: TouchOutcome;
+
+  @IsString()
+  @IsOptional()
+  approachId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  abordadoEm?: string;
 }
 
 // `stage` e os carimbos de etapa não entram aqui de propósito: quem os
@@ -142,10 +162,6 @@ export class UpdateProspectDto {
   @Min(0)
   @IsOptional()
   dealValue?: number;
-
-  @IsString()
-  @IsOptional()
-  notes?: string;
 }
 
 export class RegisterTouchDto {
@@ -241,4 +257,10 @@ export class BulkProspectDto {
   @IsEnum(ProspectStage)
   @IsOptional()
   stage?: ProspectStage;
+}
+
+export class UpsertProspectNoteDto {
+  @IsString()
+  @IsNotEmpty()
+  content!: string;
 }

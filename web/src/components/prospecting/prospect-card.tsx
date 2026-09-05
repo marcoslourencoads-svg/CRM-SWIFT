@@ -8,7 +8,7 @@ import {
   contactLink,
   daysOverdue,
   displayName,
-  formatDateBR,
+  formatCompromisso,
   isOverdue,
   subtitleOf,
   type Prospect,
@@ -98,12 +98,12 @@ export function ProspectCard({ prospect, onClick, showStage, className, actions 
 
         {atrasado ? (
           <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
-            atrasado {atraso === 1 ? 'há 1 dia' : `há ${atraso} dias`} · desde{' '}
-            {formatDateBR(prospect.nextActionAt)}
+            atrasado {atraso === 1 ? 'há 1 dia' : `há ${atraso} dias`} · era{' '}
+            {formatCompromisso(prospect.nextActionAt)}
           </span>
         ) : prospect.nextActionAt ? (
           <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-            próximo toque {formatDateBR(prospect.nextActionAt)}
+            {formatCompromisso(prospect.nextActionAt)}
           </span>
         ) : null}
 

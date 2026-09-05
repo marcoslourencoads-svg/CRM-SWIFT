@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowRight, ExternalLink, Send, Trash2, X } from 'lucide-react';
+import { ArrowRight, ExternalLink, NotebookPen, Send, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +34,9 @@ import {
   displayName,
   formatFullDateBR,
   toDateInput,
+  toTimeInput,
+  paraInstante,
+  formatCompromisso,
   type Prospect,
   type ProspectChannel,
   type ProspectStage,
@@ -60,6 +64,8 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
   const [convertOpen, setConvertOpen] = useState(false);
   const [lostReasons, setLostReasons] = useState<LostReason[]>([]);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [novaNota, setNovaNota] = useState('');
+  const [salvandoNota, setSalvandoNota] = useState(false);
 
   const load = useCallback(async () => {
     if (!prospectId) return;
@@ -76,8 +82,8 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
         email: p.email ?? '',
         niche: p.niche ?? '',
         city: p.city ?? '',
-        notes: p.notes ?? '',
         nextActionAt: toDateInput(p.nextActionAt),
+        nextActionTime: toTimeInput(p.nextActionAt) || '09:00',
         hasAds: p.hasAds === null ? 'unknown' : String(p.hasAds),
         channel: p.channel,
       });
@@ -116,10 +122,14 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
         email: form.email.trim(),
         niche: form.niche.trim(),
         city: form.city.trim(),
-        notes: form.notes.trim(),
+
         channel: form.channel as ProspectChannel,
         ...(form.hasAds !== 'unknown' ? { hasAds: form.hasAds === 'true' } : {}),
-        nextActionAt: form.nextActionAt ? new Date(form.nextActionAt).toISOString() : undefined,
+        // Data + hora lidas como horário LOCAL. Com `new Date(data)` a
+        // gravação virava meia-noite UTC e o compromisso nascia vencido.
+        nextActionAt: form.nextActionAt
+          ? paraInstante(form.nextActionAt, form.nextActionTime)
+          : undefined,
       });
       toast.success('Ficha atualizada');
       await load();
@@ -143,6 +153,31 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
       onChanged?.();
     } catch {
       toast.error('Não foi possível mudar a etapa');
+    }
+  }
+
+  async function handleAddNote() {
+    if (!prospect || !novaNota.trim()) return;
+    setSalvandoNota(true);
+    try {
+      await api.post(`/prospects/${prospect.id}/notes`, { content: novaNota.trim() });
+      setNovaNota('');
+      toast.success('Anotação salva');
+      await load();
+      onChanged?.();
+    } catch {
+      toast.error('Não foi possível salvar a anotação');
+    } finally {
+      setSalvandoNota(false);
+    }
+  }
+
+  async function handleRemoveNote(noteId: string) {
+    try {
+      await api.delete(`/prospect-notes/${noteId}`);
+      await load();
+    } catch {
+      toast.error('Não foi possível remover a anotação');
     }
   }
 
@@ -281,6 +316,69 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
 
               <Separator />
 
+              {/* Diário de bordo — item 3. Antes era um campo de uma
+                  linha só, e cada edição apagava a anterior. Aqui cada
+                  anotação fica com data, autor e a etapa em que estava. */}
+              <div>
+                <div className="mb-2 flex items-center gap-1.5">
+                  <NotebookPen className="size-3.5 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">
+                    Observações ({prospect.notes.length})
+                  </h3>
+                </div>
+
+                <Textarea
+                  value={novaNota}
+                  onChange={(e) => setNovaNota(e.target.value)}
+                  placeholder="O que foi visto, o que foi tratado, o que ficou de fazer..."
+                  className="min-h-20"
+                />
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Fica salvo na etapa &quot;{STAGE_META[prospect.stage].label}&quot;.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={handleAddNote}
+                    disabled={salvandoNota || !novaNota.trim()}
+                  >
+                    {salvandoNota ? 'Salvando...' : 'Anotar'}
+                  </Button>
+                </div>
+
+                {prospect.notes.length > 0 && (
+                  <ol className="mt-3 space-y-2">
+                    {prospect.notes.map((n) => (
+                      <li key={n.id} className="rounded-md border p-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={cn(
+                              'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                              STAGE_META[n.stage].badge,
+                            )}
+                          >
+                            {STAGE_META[n.stage].short}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatFullDateBR(n.createdAt)}
+                            {n.user ? ` · ${n.user.name}` : ''}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 whitespace-pre-wrap text-xs">{n.content}</p>
+                        <button
+                          onClick={() => handleRemoveNote(n.id)}
+                          className="mt-1 text-[10px] text-muted-foreground hover:text-destructive"
+                        >
+                          remover
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+
+              <Separator />
+
               {/* Trilha de toques */}
               <div>
                 <h3 className="mb-2 text-sm font-semibold">
@@ -377,13 +475,26 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
                   <Field label="Telefone" value={form.phone} onChange={(v) => set('phone', v)} />
                   <Field label="E-mail" value={form.email} onChange={(v) => set('email', v)} />
 
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Próxima ação</Label>
-                    <Input
-                      type="date"
-                      value={form.nextActionAt}
-                      onChange={(e) => set('nextActionAt', e.target.value)}
-                    />
+                  <div className="col-span-2 space-y-1.5">
+                    <Label className="text-xs">Próximo contato</Label>
+                    <div className="flex gap-1.5">
+                      <Input
+                        type="date"
+                        value={form.nextActionAt}
+                        onChange={(e) => set('nextActionAt', e.target.value)}
+                      />
+                      <Input
+                        type="time"
+                        className="w-[7.5rem] shrink-0"
+                        value={form.nextActionTime}
+                        onChange={(e) => set('nextActionTime', e.target.value)}
+                        aria-label="Hora do próximo contato"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      O sino avisa 30 minutos antes, e o compromisso aparece no
+                      calendário e na fila do dia.
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
@@ -424,8 +535,6 @@ export function ProspectDrawer({ prospectId, onOpenChange, onChanged }: Props) {
                     </Select>
                   </div>
                 </div>
-
-                <Field label="Observações" value={form.notes} onChange={(v) => set('notes', v)} />
 
                 <Button onClick={handleSave} disabled={saving} size="sm" className="w-full">
                   {saving ? 'Salvando...' : 'Salvar ficha'}

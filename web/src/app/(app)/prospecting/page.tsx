@@ -69,8 +69,11 @@ export default function ProspectingQueuePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // O servidor roda em UTC; manda o fuso de quem olha para que
+      // "hoje" e "atrasado" batam com o relógio do operador.
+      const tz = new Date().getTimezoneOffset();
       const [queueRes, listsRes] = await Promise.all([
-        api.get('/prospects/queue'),
+        api.get(`/prospects/queue?tzOffset=${tz}`),
         api.get('/prospect-lists'),
       ]);
       setQueue(queueRes.data.data ?? EMPTY_QUEUE);

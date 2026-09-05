@@ -35,6 +35,14 @@ export interface ProspectTouch {
   approach?: { id: string; name: string } | null;
 }
 
+export interface ProspectNote {
+  id: string;
+  stage: ProspectStage;
+  content: string;
+  createdAt: string;
+  user?: { id: string; name: string } | null;
+}
+
 export interface Prospect {
   id: string;
   name: string;
@@ -62,11 +70,11 @@ export interface Prospect {
   lostReasonId: string | null;
   lostNote: string | null;
   leadId: string | null;
-  notes: string | null;
   createdAt: string;
   owner?: { id: string; name: string; email: string } | null;
   list?: { id: string; name: string; cadenceDays: number[] } | null;
   touches: ProspectTouch[];
+  notes: ProspectNote[];
 }
 
 export interface ProspectList {
@@ -207,9 +215,71 @@ export function formatFullDateBR(value: string | null | undefined): string {
   return new Date(value).toLocaleDateString('pt-BR');
 }
 
+function doisDigitos(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/**
+ * Formata para o <input type="date"> em horário LOCAL.
+ *
+ * Com toISOString() aqui, um compromisso das 21h em São Paulo aparecia
+ * no campo como o dia seguinte — o instante é o mesmo, mas a data em UTC
+ * já virou.
+ */
 export function toDateInput(value: string | null | undefined): string {
   if (!value) return '';
-  return new Date(value).toISOString().slice(0, 10);
+  const d = new Date(value);
+  return `${d.getFullYear()}-${doisDigitos(d.getMonth() + 1)}-${doisDigitos(d.getDate())}`;
+}
+
+/** Hora local no formato do <input type="time">. */
+export function toTimeInput(value: string | null | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  return `${doisDigitos(d.getHours())}:${doisDigitos(d.getMinutes())}`;
+}
+
+/**
+ * Junta data e hora escolhidas na tela num instante real, interpretando
+ * as duas como horário LOCAL.
+ *
+ * É o conserto do bug que marcava o cadastro como atrasado no ato:
+ * `new Date('2026-09-05')` é lido como meia-noite UTC, que no Brasil
+ * (UTC-3) cai às 21h do dia ANTERIOR — ou seja, já vencido. O construtor
+ * com argumentos separados não tem essa armadilha.
+ */
+export function paraInstante(data: string, hora?: string): string | null {
+  if (!data) return null;
+  const [ano, mes, dia] = data.split('-').map(Number);
+  if (!ano || !mes || !dia) return null;
+  const [h, m] = (hora || '09:00').split(':').map(Number);
+  return new Date(ano, mes - 1, dia, h || 0, m || 0, 0, 0).toISOString();
+}
+
+/**
+ * Sugestão de horário para um compromisso novo: a próxima hora cheia.
+ * Passou das 21h, joga para as 9h de amanhã — assim o padrão nunca nasce
+ * no passado.
+ */
+export function proximoCompromissoPadrao(): { data: string; hora: string } {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + 1);
+  if (d.getHours() >= 21 || d.getHours() < 8) {
+    d.setDate(d.getDate() + (d.getHours() >= 21 ? 1 : 0));
+    d.setHours(9);
+  }
+  return {
+    data: `${d.getFullYear()}-${doisDigitos(d.getMonth() + 1)}-${doisDigitos(d.getDate())}`,
+    hora: `${doisDigitos(d.getHours())}:${doisDigitos(d.getMinutes())}`,
+  };
+}
+
+/** Dia e hora do compromisso, como aparece nos cards. */
+export function formatCompromisso(value: string | null | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  return `${doisDigitos(d.getDate())}/${doisDigitos(d.getMonth() + 1)} às ${doisDigitos(d.getHours())}:${doisDigitos(d.getMinutes())}`;
 }
 
 /** Dia da cadência: D0 no dia da abordagem, D5 cinco dias depois. */

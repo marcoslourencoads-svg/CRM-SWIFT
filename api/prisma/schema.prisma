@@ -284,6 +284,7 @@ model User {
   notificationPreferences NotificationPreference[] @relation("NotificationPreference")
   ownedProspects          Prospect[]               @relation("ProspectOwner")
   prospectTouches         ProspectTouch[]          @relation("ProspectToucher")
+  prospectNotes           ProspectNote[]           @relation("ProspectNoteUser")
 
   @@map("users")
 }
@@ -808,6 +809,7 @@ enum NotificationType {
   NOTE_ADDED
   MENTION
   TASK_DUE
+  PROSPECT_DUE
   LEAD_STALE
   INVITE
   AUTOMATION
@@ -1122,7 +1124,6 @@ model Prospect {
   leadId    String? @unique @map("lead_id")
   contactId String? @map("contact_id")
 
-  notes     String?
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
@@ -1130,6 +1131,7 @@ model Prospect {
   list    ProspectList?   @relation(fields: [listId], references: [id], onDelete: SetNull)
   owner   User?           @relation("ProspectOwner", fields: [ownerId], references: [id])
   touches ProspectTouch[]
+  notes   ProspectNote[]
 
   @@index([organizationId, stage, deletedAt])
   @@index([organizationId, nextActionAt])
@@ -1162,4 +1164,27 @@ model ProspectTouch {
   @@index([prospectId, sentAt])
   @@index([approachId])
   @@map("prospect_touches")
+}
+
+// Diario de bordo do prospect: uma anotacao por vez, com a etapa
+// carimbada. Substitui o campo de texto solto que existia antes — ali
+// cada edicao apagava a anterior, e nao dava para saber quando nem em
+// que etapa algo foi observado.
+model ProspectNote {
+  id         String        @id @default(cuid())
+  prospectId String        @map("prospect_id")
+  userId     String?       @map("user_id")
+  // Copia da etapa no momento da escrita. Guardada de proposito: mudar
+  // de etapa depois nao pode reescrever o passado.
+  stage      ProspectStage
+  content    String
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  deletedAt  DateTime?     @map("deleted_at")
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  user     User?    @relation("ProspectNoteUser", fields: [userId], references: [id])
+
+  @@index([prospectId, createdAt(sort: Desc)])
+  @@map("prospect_notes")
 }

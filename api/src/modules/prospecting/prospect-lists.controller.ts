@@ -14,6 +14,8 @@ import { ProspectListsService } from './prospect-lists.service';
 import { CurrentOrg, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UpsertProspectListDto, UpsertApproachDto } from './dto/prospect-list.dto';
+import { UpsertProspectNoteDto } from './dto/prospect.dto';
+import { ProspectsService } from './prospects.service';
 
 @Controller('prospect-lists')
 export class ProspectListsController {
@@ -77,5 +79,25 @@ export class ProspectApproachesController {
   @Roles('ADMIN')
   remove(@CurrentOrg() orgId: string, @Param('id') id: string) {
     return this.service.removeApproach(orgId, id);
+  }
+}
+
+@Controller('prospect-notes')
+export class ProspectNotesController {
+  constructor(private readonly service: ProspectsService) {}
+
+  @Patch(':id')
+  update(
+    @CurrentOrg() orgId: string,
+    @Param('id') id: string,
+    @Body() dto: UpsertProspectNoteDto,
+  ) {
+    return this.service.updateNote(orgId, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@CurrentOrg() orgId: string, @Param('id') id: string) {
+    return this.service.removeNote(orgId, id);
   }
 }

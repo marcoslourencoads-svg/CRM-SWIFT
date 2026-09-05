@@ -35,6 +35,8 @@ describe('ProspectsController (rotas)', () => {
     bulkList: jest.fn().mockResolvedValue({ updated: 2 }),
     bulkStage: jest.fn().mockResolvedValue({ updated: 2 }),
     bulkDelete: jest.fn().mockResolvedValue({ deleted: 2 }),
+    addNote: jest.fn().mockResolvedValue({ id: 'p1' }),
+    getAgenda: jest.fn().mockResolvedValue([]),
   };
 
   const importService = {
@@ -117,6 +119,20 @@ describe('ProspectsController (rotas)', () => {
       expect(service.update).not.toHaveBeenCalled();
     });
 
+    it('GET /prospects/agenda chama getAgenda, nao findOne', async () => {
+      await request(app.getHttpServer())
+        .get('/prospects/agenda?from=2026-09-01&to=2026-09-30')
+        .expect(200);
+
+      expect(service.getAgenda).toHaveBeenCalled();
+      expect(service.findOne).not.toHaveBeenCalled();
+    });
+
+    it('GET /prospects/agenda sem periodo e recusado', async () => {
+      await request(app.getHttpServer()).get('/prospects/agenda').expect(400);
+      expect(service.getAgenda).not.toHaveBeenCalled();
+    });
+
     it('GET /prospects/:id continua funcionando para id de verdade', async () => {
       await request(app.getHttpServer()).get('/prospects/ckabc123').expect(200);
 
@@ -153,6 +169,22 @@ describe('ProspectsController (rotas)', () => {
       expect(service.convert).toHaveBeenCalled();
     });
 
+    it('POST /prospects/:id/notes grava no diario', async () => {
+      await request(app.getHttpServer())
+        .post('/prospects/p1/notes')
+        .send({ content: 'Pediu para retornar terca 14h.' })
+        .expect(201);
+
+      expect(service.addNote).toHaveBeenCalled();
+    });
+
+    it('recusa anotacao vazia', async () => {
+      await request(app.getHttpServer())
+        .post('/prospects/p1/notes')
+        .send({ content: '' })
+        .expect(400);
+    });
+
     it('DELETE /prospects/:id devolve 204', async () => {
       await request(app.getHttpServer()).delete('/prospects/p1').expect(204);
       expect(service.remove).toHaveBeenCalled();
@@ -171,7 +203,7 @@ describe('ProspectsController (rotas)', () => {
         .send({ name: 'Rafael Souza' })
         .expect(201);
 
-      expect(service.create).toHaveBeenCalledWith('org-1', { name: 'Rafael Souza' });
+      expect(service.create).toHaveBeenCalledWith('org-1', 'user-1', { name: 'Rafael Souza' });
     });
 
     it('recusa etapa que nao existe no enum', async () => {
@@ -184,11 +216,12 @@ describe('ProspectsController (rotas)', () => {
     });
 
     it('recusa campo desconhecido, em vez de ignorar em silencio', async () => {
-      // forbidNonWhitelisted: impede o cliente de mandar `stage` ou um
-      // carimbo cru no update e achar que o servidor obedeceu.
+      // forbidNonWhitelisted: impede o cliente de mandar `stage`, um
+      // carimbo cru, ou o antigo `notes` de texto solto — que agora tem
+      // endpoint proprio — e achar que o servidor obedeceu.
       await request(app.getHttpServer())
         .patch('/prospects/p1')
-        .send({ name: 'ok', stage: 'WON' })
+        .send({ name: 'ok', notes: 'texto solto' })
         .expect(400);
 
       expect(service.update).not.toHaveBeenCalled();

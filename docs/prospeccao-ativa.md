@@ -30,6 +30,7 @@ funil "Prospecção Ativa". Três coisas impediram:
 | `prospect_touches` | Um registro por toque. Substitui as 6 colunas de FUP. |
 | `prospect_lists` | O lote/campanha. Guarda a **cadência**. |
 | `prospect_approaches` | Catálogo de scripts do primeiro toque. |
+| `prospect_notes` | Diário de bordo: uma anotação por vez, com a etapa carimbada. |
 
 ### A etapa é um campo, não uma inferência
 
@@ -68,6 +69,44 @@ enterrar é ato separado.
 
 `@@unique([prospect_id, sequence])` impede toque duplicado na mesma posição se
 duas requisições chegarem juntas.
+
+### O diário de bordo
+
+Cada anotação guarda **a etapa em que o prospect estava no momento da
+escrita**. É uma cópia de propósito: avançar de etapa depois não pode
+reescrever o passado. A ficha mostra o diário do mais recente para o mais
+antigo, acima da trilha de toques.
+
+Antes existia um único campo de texto solto (`prospects.notes`), de uma
+linha só, em que cada edição apagava a anterior. A migração
+`20260905170000` move o que estava escrito para a primeira entrada do
+diário e derruba a coluna — não há dois lugares para escrever a mesma
+coisa.
+
+A observação preenchida **no cadastro** vira essa primeira entrada, em
+vez de exigir que se abra a ficha logo em seguida.
+
+### Compromisso com hora
+
+`nextActionAt` guarda dia **e hora**. Três coisas dependem dele:
+
+1. **Fila do dia** — os baldes de atrasado / hoje.
+2. **Calendário** — `GET /prospects/agenda?from&to` alimenta a mesma
+   grade das tarefas, em âmbar.
+3. **Sino** — `ProspectReminderScheduler` roda de 5 em 5 minutos e cria
+   uma notificação `PROSPECT_DUE` 30 minutos antes da hora marcada, para
+   o dono do prospect. Tem guarda contra repetir o mesmo aviso dentro da
+   janela.
+
+> **Fuso.** Data e hora escolhidas na tela são lidas como horário LOCAL.
+> `new Date('2026-09-05')` seria meia-noite **UTC** — 21h do dia anterior
+> no Brasil — e o cadastro nasceria vencido; foi exatamente o bug
+> relatado. O helper `paraInstante()` monta o instante com o construtor
+> de argumentos separados, que não tem essa armadilha.
+>
+> Pelo mesmo motivo `GET /prospects/queue` aceita `tzOffset` (minutos, o
+> que `Date.getTimezoneOffset()` devolve): em produção a API roda em UTC,
+> e sem isso o "hoje" do servidor não seria o "hoje" de quem olha.
 
 ## Telas
 
@@ -227,6 +266,12 @@ A3       3     4       toque 4       seq 4:  3 enviados,  3 respostas = 100,00%
 B1/2/3  28   1..3      nunca
 ```
 
+### Melhorias — `cd api && npm run melhorias:verificar`
+
+Precisa da API no ar. Exercita as quatro melhorias (observação no
+cadastro, "já abordei", compromisso com hora na agenda, diário por etapa)
+e o bug do cadastro nascendo atrasado. **19 asserções.**
+
 ### Interface — `cd web && npm run ui:verificar`
 
 Precisa da API (3333) e do front (3000) no ar. Faz login num navegador
@@ -236,3 +281,10 @@ rótulo, não o valor cru) e salva PNGs em `web/shots/`.
 
 > As páginas são client components atrás do `AuthGuard`, então `curl` só
 > enxerga o spinner — verificar a UI exige navegador.
+
+### Melhorias na tela — `cd web && npm run ui:melhorias`
+
+Opera pelo formulário num navegador de verdade: liga o "já abordei",
+escreve no diário, e confere que o cadastro **não** nasce atrasado —
+coisa que só dá para ver com o relógio local. **26 asserções**, com
+capturas.
