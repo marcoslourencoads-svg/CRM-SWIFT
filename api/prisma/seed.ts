@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
+import { OrganizationBootstrapService } from '../src/modules/onboarding/organization-bootstrap.service';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
@@ -44,6 +45,12 @@ async function main() {
       role: 'OWNER',
     },
   });
+
+  // Mesmo bootstrap que o registro dispara. Sem isto a org semeada nasce
+  // sem lead sources, sem lista de prospeccao e sem motivos de perda — e
+  // a conversao de prospect em lead sairia sem origem.
+  const bootstrap = new OrganizationBootstrapService(prisma as never);
+  await bootstrap.bootstrap(org.id, prisma as never, admin.id);
 
   const vendasB2B = await prisma.pipeline.findFirst({
     where: { organizationId: org.id, name: 'Vendas B2B' },
@@ -101,6 +108,7 @@ async function main() {
   console.log(`  Organization: ${org.name} (${org.slug})`);
   console.log(`  Admin: ${admin.email} (OWNER)`);
   console.log('  Pipelines: Vendas B2B (8 statuses), Inbound Marketing (6 statuses)');
+  console.log('  Bootstrap: lead sources, motivos de perda, prospeccao (lista + abordagens)');
 }
 
 main()

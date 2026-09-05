@@ -18,6 +18,10 @@ import {
   ScrollText,
   CalendarClock,
   List,
+  Target,
+  ListChecks,
+  FolderOpen,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -45,6 +49,12 @@ const communicationsItems = [
   { href: '/team-chat', label: 'Chat do Time', icon: MessagesSquare },
 ];
 
+const prospectingItems = [
+  { href: '/prospecting/board', label: 'Quadro', icon: Kanban },
+  { href: '/prospecting/lists', label: 'Listas', icon: FolderOpen },
+  { href: '/prospecting/funnel', label: 'Funil', icon: TrendingUp },
+];
+
 const agendaItems = [
   { href: '/activities', label: 'Lista', icon: List },
   { href: '/calendar', label: 'Calendário', icon: Calendar },
@@ -58,6 +68,7 @@ export function Sidebar() {
   const [pipelinesOpen, setPipelinesOpen] = useState(true);
   const [commsOpen, setCommsOpen] = useState(true);
   const [agendaOpen, setAgendaOpen] = useState(true);
+  const [prospectingOpen, setProspectingOpen] = useState(true);
 
   useEffect(() => {
     api
@@ -127,6 +138,59 @@ export function Sidebar() {
               </Link>
             );
           })}
+
+        <Separator className="my-2" />
+
+        {/* Prospecção ativa section */}
+        <button
+          onClick={() => setProspectingOpen((v) => !v)}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground transition-colors"
+        >
+          <Target className="h-4 w-4" />
+          <span className="flex-1 text-left">Prospecção</span>
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 transition-transform',
+              prospectingOpen && 'rotate-180',
+            )}
+          />
+        </button>
+        {prospectingOpen && (
+          <>
+            {/* A fila do dia é o destino padrão da seção: é a partir dela
+                que a prospecção acontece. */}
+            <Link
+              href="/prospecting"
+              className={cn(
+                'flex items-center gap-3 rounded-md py-1.5 pl-10 pr-3 text-sm transition-colors',
+                pathname === '/prospecting'
+                  ? 'bg-accent text-accent-foreground font-medium'
+                  : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
+              )}
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+              Fila do dia
+            </Link>
+            {prospectingItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-md py-1.5 pl-10 pr-3 text-sm transition-colors',
+                    isActive
+                      ? 'bg-accent text-accent-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
+                  )}
+                >
+                  <item.icon className="h-3.5 w-3.5" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </>
+        )}
 
         <Separator className="my-2" />
 

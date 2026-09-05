@@ -1080,8 +1080,11 @@ model Prospect {
   listId         String? @map("list_id")
   ownerId        String? @map("owner_id")
 
-  // Identidade
+  // Identidade — `name` é a pessoa, `business` é o negócio.
+  // O card lidera pelo negócio ("Estrela dos Pagos") e usa o nicho
+  // como subtítulo ("Churrascaria/Restaurante").
   name       String
+  business   String?
   handle     String?
   profileUrl String? @map("profile_url")
   phone      String?
