@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Target, CheckCircle2, X, Filter } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Target, CheckCircle2, X, Filter, Phone } from 'lucide-react';
 import {
   format,
   startOfMonth,
@@ -62,6 +62,16 @@ interface LeadEvent {
   pipelineId: string;
 }
 
+/** Compromisso de prospecção: o "retornar terça 14h". */
+interface ProspectEvent {
+  id: string;
+  name: string;
+  business: string | null;
+  nextActionAt: string;
+  stage: string;
+  touchCount: number;
+}
+
 interface LeadOption {
   id: string;
   title: string;
@@ -94,6 +104,7 @@ export default function CalendarPage() {
   const [refDate, setRefDate] = useState(new Date());
   const [tasks, setTasks] = useState<TaskEvent[]>([]);
   const [leads, setLeads] = useState<LeadEvent[]>([]);
+  const [prospects, setProspects] = useState<ProspectEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [leadOptions, setLeadOptions] = useState<LeadOption[]>([]);
@@ -145,14 +156,25 @@ export default function CalendarPage() {
 
       const tasksPromise = api.get(`/tasks?${params}`).then((r) => r.data.data ?? []);
       const pipelinesPromise = api.get('/pipelines').then((r) => r.data.data ?? []);
+      // Compromissos da prospecção entram no mesmo calendário das
+      // tarefas: e o "cliente pediu para retornar terca" precisa cair
+      // num lugar que a pessoa ja olha.
+      const prospectsPromise = api
+        .get(`/prospects/agenda?from=${range.start.toISOString()}&to=${range.end.toISOString()}`)
+        .then((r) => r.data.data ?? []);
 
-      const [tasksRes, pipelinesRes] = await Promise.allSettled([tasksPromise, pipelinesPromise]);
+      const [tasksRes, pipelinesRes, prospectsRes] = await Promise.allSettled([
+        tasksPromise,
+        pipelinesPromise,
+        prospectsPromise,
+      ]);
 
       const tasksData = tasksRes.status === 'fulfilled' ? tasksRes.value : [];
       const allPipelines: { id: string; name: string }[] =
         pipelinesRes.status === 'fulfilled' ? pipelinesRes.value : [];
 
       setTasks(tasksData);
+      setProspects(prospectsRes.status === 'fulfilled' ? prospectsRes.value : []);
 
       const relevantPipelines =
         filterPipeline === 'all'
@@ -190,6 +212,9 @@ export default function CalendarPage() {
       }
       if (pipelinesRes.status === 'rejected') {
         console.warn('[calendar] pipelines falhou:', pipelinesRes.reason?.message);
+      }
+      if (prospectsRes.status === 'rejected') {
+        console.warn('[calendar] prospects falhou:', prospectsRes.reason?.message);
       }
 
       setLoading(false);
@@ -250,6 +275,22 @@ export default function CalendarPage() {
       ),
     [leads],
   );
+  const prospectsOnDay = useCallback(
+    (day: Date) =>
+      prospects.filter(
+        (p) => format(new Date(p.nextActionAt), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd'),
+      ),
+    [prospects],
+  );
+  const prospectsAtHour = useCallback(
+    (day: Date, hour: number) =>
+      prospects.filter((p) => {
+        const d = new Date(p.nextActionAt);
+        return format(d, 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd') && d.getHours() === hour;
+      }),
+    [prospects],
+  );
+
   const tasksAtHour = useCallback(
     (day: Date, hour: number) =>
       tasks.filter((t) => {
@@ -383,6 +424,7 @@ export default function CalendarPage() {
           refDate={refDate}
           tasksOnDay={tasksOnDay}
           leadsOnDay={leadsOnDay}
+          prospectsOnDay={prospectsOnDay}
           openCreate={openCreate}
         />
       ) : (
@@ -390,6 +432,7 @@ export default function CalendarPage() {
           view={view}
           refDate={refDate}
           tasksAtHour={tasksAtHour}
+          prospectsAtHour={prospectsAtHour}
           leadsOnDay={leadsOnDay}
           openCreate={openCreate}
         />
@@ -452,11 +495,13 @@ function MonthView({
   refDate,
   tasksOnDay,
   leadsOnDay,
+  prospectsOnDay,
   openCreate,
 }: {
   refDate: Date;
   tasksOnDay: (d: Date) => TaskEvent[];
   leadsOnDay: (d: Date) => LeadEvent[];
+  prospectsOnDay: (d: Date) => ProspectEvent[];
   openCreate: (d: Date) => void;
 }) {
   const gridDays = useMemo(() => {
@@ -480,7 +525,8 @@ function MonthView({
           const today = isToday(day);
           const dayTasks = tasksOnDay(day);
           const dayLeads = leadsOnDay(day);
-          const total = dayTasks.length + dayLeads.length;
+          const dayProspects = prospectsOnDay(day);
+          const total = dayTasks.length + dayLeads.length + dayProspects.length;
 
           return (
             <button
@@ -515,13 +561,28 @@ function MonthView({
                     <span className="truncate">{t.title}</span>
                   </div>
                 ))}
-                {dayLeads.slice(0, Math.max(0, 3 - dayTasks.length)).map((l) => (
-                  <div key={l.id} className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] text-white"
-                    style={{ backgroundColor: l.status.color }}>
-                    <Target className="size-2.5 shrink-0" />
-                    <span className="truncate">{l.title}</span>
-                  </div>
-                ))}
+                {dayProspects
+                  .slice(0, Math.max(0, 3 - dayTasks.length))
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-1 truncate rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-800"
+                    >
+                      <Phone className="size-2.5 shrink-0" />
+                      <span className="truncate">
+                        {format(new Date(p.nextActionAt), 'HH:mm')} {p.business || p.name}
+                      </span>
+                    </div>
+                  ))}
+                {dayLeads
+                  .slice(0, Math.max(0, 3 - dayTasks.length - dayProspects.length))
+                  .map((l) => (
+                    <div key={l.id} className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] text-white"
+                      style={{ backgroundColor: l.status.color }}>
+                      <Target className="size-2.5 shrink-0" />
+                      <span className="truncate">{l.title}</span>
+                    </div>
+                  ))}
               </div>
             </button>
           );
@@ -537,12 +598,14 @@ function TimelineView({
   view,
   refDate,
   tasksAtHour,
+  prospectsAtHour,
   leadsOnDay,
   openCreate,
 }: {
   view: 'day' | 'week';
   refDate: Date;
   tasksAtHour: (d: Date, hour: number) => TaskEvent[];
+  prospectsAtHour: (d: Date, hour: number) => ProspectEvent[];
   leadsOnDay: (d: Date) => LeadEvent[];
   openCreate: (d: Date) => void;
 }) {
@@ -608,6 +671,7 @@ function TimelineView({
               const slot = new Date(day);
               slot.setHours(hour, 0, 0, 0);
               const events = tasksAtHour(day, hour);
+              const retornos = prospectsAtHour(day, hour);
               return (
                 <button
                   key={day.toISOString() + hour}
@@ -623,6 +687,20 @@ function TimelineView({
                       <CheckCircle2 className="size-2.5 shrink-0" />
                       <span className="truncate">{format(new Date(t.dueDate), 'HH:mm')} {t.title}</span>
                     </div>
+                  ))}
+                  {retornos.map((p, i) => (
+                    <Link
+                      key={p.id}
+                      href="/prospecting"
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute inset-x-1 flex items-center gap-1 truncate rounded bg-amber-500 px-1.5 py-1 text-[10px] text-white"
+                      style={{ top: `${4 + (events.length + i) * 26}px` }}
+                    >
+                      <Phone className="size-2.5 shrink-0" />
+                      <span className="truncate">
+                        {format(new Date(p.nextActionAt), 'HH:mm')} {p.business || p.name}
+                      </span>
+                    </Link>
                   ))}
                 </button>
               );

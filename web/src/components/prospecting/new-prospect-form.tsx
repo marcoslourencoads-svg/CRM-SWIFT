@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { CheckCircle2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -14,7 +16,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import api from '@/lib/api';
-import { CHANNEL_META, type ProspectChannel, type ProspectList } from '@/lib/prospecting';
+import { cn } from '@/lib/utils';
+import {
+  CHANNEL_META,
+  OUTCOME_META,
+  paraInstante,
+  proximoCompromissoPadrao,
+  type ProspectApproach,
+  type ProspectChannel,
+  type ProspectList,
+  type TouchOutcome,
+} from '@/lib/prospecting';
 
 interface Props {
   lists: ProspectList[];
@@ -30,6 +42,7 @@ const EMPTY = {
   email: '',
   handle: '',
   niche: '',
+  observacao: '',
 };
 
 /**
@@ -43,8 +56,27 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
   const [form, setForm] = useState(EMPTY);
   const [channel, setChannel] = useState<ProspectChannel>('INSTAGRAM');
   const [listId, setListId] = useState(defaultListId ?? lists[0]?.id ?? 'none');
-  const [nextActionAt, setNextActionAt] = useState(new Date().toISOString().slice(0, 10));
+
+  // Já abordei: registra o primeiro toque junto do cadastro, para não
+  // ter que abrir a ficha logo em seguida só para marcar isso.
+  const [jaAbordado, setJaAbordado] = useState(false);
+  const [resultado, setResultado] = useState<TouchOutcome>('NO_REPLY');
+  const [approachId, setApproachId] = useState('none');
+  const [approaches, setApproaches] = useState<ProspectApproach[]>([]);
+
+  const padrao = proximoCompromissoPadrao();
+  const [data, setData] = useState(padrao.data);
+  const [hora, setHora] = useState(padrao.hora);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    api
+      .get('/prospect-approaches')
+      .then((res) =>
+        setApproaches((res.data.data ?? []).filter((a: ProspectApproach) => a.isActive)),
+      )
+      .catch(() => {});
+  }, []);
 
   function set(key: keyof typeof EMPTY, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -64,12 +96,24 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
         ...(form.email.trim() ? { email: form.email.trim() } : {}),
         ...(form.handle.trim() ? { handle: form.handle.trim() } : {}),
         ...(form.niche.trim() ? { niche: form.niche.trim() } : {}),
+        ...(form.observacao.trim() ? { observacao: form.observacao.trim() } : {}),
         channel,
         ...(listId !== 'none' ? { listId } : {}),
-        ...(nextActionAt ? { nextActionAt: new Date(nextActionAt).toISOString() } : {}),
+        // Data e hora viram um instante em horário LOCAL. Montar com
+        // `new Date('2026-09-05')` marcaria meia-noite UTC — 21h do dia
+        // anterior no Brasil — e o cadastro nasceria atrasado.
+        ...(data ? { nextActionAt: paraInstante(data, hora) } : {}),
+        ...(jaAbordado
+          ? {
+              jaAbordado: true,
+              primeiroToqueResultado: resultado,
+              ...(approachId !== 'none' ? { approachId } : {}),
+            }
+          : {}),
       });
-      toast.success('Prospect adicionado');
+      toast.success(jaAbordado ? 'Prospect cadastrado e abordagem registrada' : 'Prospect adicionado');
       setForm(EMPTY);
+      setJaAbordado(false);
       onCreated();
     } catch {
       toast.error('Não foi possível adicionar');
@@ -100,7 +144,6 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
             autoFocus
             value={form.name}
             onChange={(e) => set('name', e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder="Ex: Rafael Souza"
           />
         </div>
@@ -166,8 +209,11 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-xs">Canal do primeiro toque</Label>
-          <Select value={channel} onValueChange={(v) => setChannel((v ?? 'INSTAGRAM') as ProspectChannel)}>
+          <Label className="text-xs">Canal</Label>
+          <Select
+            value={channel}
+            onValueChange={(v) => setChannel((v ?? 'INSTAGRAM') as ProspectChannel)}
+          >
             <SelectTrigger>
               <SelectValue>{CHANNEL_META[channel].label}</SelectValue>
             </SelectTrigger>
@@ -203,16 +249,117 @@ export function NewProspectForm({ lists, defaultListId, onCreated, onCancel }: P
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="np-next" className="text-xs">
-            Próxima ação
+          <Label htmlFor="np-data" className="text-xs">
+            Próximo contato
           </Label>
-          <Input
-            id="np-next"
-            type="date"
-            value={nextActionAt}
-            onChange={(e) => setNextActionAt(e.target.value)}
-          />
+          <div className="flex gap-1.5">
+            <Input
+              id="np-data"
+              type="date"
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+            />
+            <Input
+              type="time"
+              className="w-[7.5rem] shrink-0"
+              value={hora}
+              onChange={(e) => setHora(e.target.value)}
+              aria-label="Hora do próximo contato"
+            />
+          </div>
         </div>
+      </div>
+
+      {/* Item 4: observação já no cadastro, para registrar o que foi
+          avaliado sem ter que abrir a ficha depois. */}
+      <div className="mt-3 space-y-1.5">
+        <Label htmlFor="np-obs" className="text-xs">
+          Observação
+        </Label>
+        <Textarea
+          id="np-obs"
+          value={form.observacao}
+          onChange={(e) => set('observacao', e.target.value)}
+          placeholder="O que você avaliou: faturamento, se anuncia, quem decide, o que chamou atenção..."
+          className="min-h-16"
+        />
+        <p className="text-xs text-muted-foreground">
+          Vira a primeira entrada do diário de bordo deste prospect.
+        </p>
+      </div>
+
+      {/* Item 1: já abordei — registra o primeiro toque junto. */}
+      <div
+        className={cn(
+          'mt-3 rounded-lg border p-3 transition-colors',
+          jaAbordado && 'border-emerald-300 bg-emerald-50/40',
+        )}
+      >
+        <div className="flex items-center gap-2.5">
+          <Switch
+            id="np-abordado"
+            checked={jaAbordado}
+            onCheckedChange={(v) => setJaAbordado(!!v)}
+          />
+          <Label htmlFor="np-abordado" className="cursor-pointer text-sm font-medium">
+            <CheckCircle2
+              className={cn(
+                'mr-1 inline size-3.5',
+                jaAbordado ? 'text-emerald-600' : 'text-muted-foreground',
+              )}
+            />
+            Já abordei este contato
+          </Label>
+        </div>
+
+        {jaAbordado ? (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Resultado da abordagem</Label>
+              <Select
+                value={resultado}
+                onValueChange={(v) => setResultado((v ?? 'NO_REPLY') as TouchOutcome)}
+              >
+                <SelectTrigger>
+                  <SelectValue>{OUTCOME_META[resultado].label}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(OUTCOME_META).map(([key, meta]) => (
+                    <SelectItem key={key} value={key}>
+                      {meta.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Abordagem usada</Label>
+              <Select value={approachId} onValueChange={(v) => setApproachId(v ?? 'none')}>
+                <SelectTrigger>
+                  <SelectValue>
+                    {approachId === 'none'
+                      ? 'Não informar'
+                      : (approaches.find((a) => a.id === approachId)?.name ?? 'Abordagem')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Não informar</SelectItem>
+                  {approaches.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1.5 pl-11 text-xs text-muted-foreground">
+            Ligue se você já mandou a mensagem — o toque entra no histórico e a
+            cadência começa a contar, sem precisar voltar aqui depois.
+          </p>
+        )}
       </div>
 
       <div className="mt-4 flex justify-end gap-2">

@@ -28,6 +28,7 @@ import {
   ChangeStageDto,
   ConvertProspectDto,
   BulkProspectDto,
+  UpsertProspectNoteDto,
 } from './dto/prospect.dto';
 
 @Controller('prospects')
@@ -67,8 +68,30 @@ export class ProspectsController {
   }
 
   @Get('queue')
-  getQueue(@CurrentOrg() orgId: string, @Query('ownerId') ownerId?: string) {
-    return this.service.getQueue(orgId, ownerId);
+  getQueue(
+    @CurrentOrg() orgId: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('tzOffset') tzOffset?: string,
+  ) {
+    const offset = tzOffset !== undefined ? parseInt(tzOffset, 10) : undefined;
+    return this.service.getQueue(
+      orgId,
+      ownerId,
+      Number.isFinite(offset) ? offset : undefined,
+    );
+  }
+
+  @Get('agenda')
+  getAgenda(
+    @CurrentOrg() orgId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('ownerId') ownerId?: string,
+  ) {
+    if (!from || !to) {
+      throw new BadRequestException('from e to sao obrigatorios');
+    }
+    return this.service.getAgenda(orgId, from, to, ownerId);
   }
 
   @Get('export')
@@ -131,8 +154,12 @@ export class ProspectsController {
   }
 
   @Post()
-  create(@CurrentOrg() orgId: string, @Body() dto: CreateProspectDto) {
-    return this.service.create(orgId, dto);
+  create(
+    @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
+    @Body() dto: CreateProspectDto,
+  ) {
+    return this.service.create(orgId, user.sub, dto);
   }
 
   @Get(':id')
@@ -172,6 +199,16 @@ export class ProspectsController {
     @Body() dto: ChangeStageDto,
   ) {
     return this.service.changeStage(orgId, id, dto);
+  }
+
+  @Post(':id/notes')
+  addNote(
+    @CurrentOrg() orgId: string,
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: UpsertProspectNoteDto,
+  ) {
+    return this.service.addNote(orgId, user.sub, id, dto);
   }
 
   @Post(':id/convert')

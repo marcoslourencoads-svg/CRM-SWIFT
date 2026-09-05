@@ -19,7 +19,8 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "meta:testar": "node scripts/testar-meta-capi.js",
-    "prospeccao:verificar": "node scripts/verificar-prospeccao.js"
+    "prospeccao:verificar": "node scripts/verificar-prospeccao.js",
+    "melhorias:verificar": "node scripts/verificar-melhorias.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

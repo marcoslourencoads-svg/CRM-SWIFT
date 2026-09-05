@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "ui:verificar": "node scripts/verificar-ui-prospeccao.mjs"
+    "ui:verificar": "node scripts/verificar-ui-prospeccao.mjs",
+    "ui:melhorias": "node scripts/verificar-ui-melhorias.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

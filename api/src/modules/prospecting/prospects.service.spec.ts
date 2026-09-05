@@ -173,6 +173,170 @@ describe('ProspectsService', () => {
     });
   });
 
+  // ─── Cadastro com "ja abordei" e observacao ──────────────
+
+  describe('create', () => {
+    function build() {
+      let criado: Record<string, unknown> = {};
+      let toqueRegistrado: unknown = null;
+      const prisma = {
+        prospect: {
+          create: jest.fn().mockImplementation((args: { data: Record<string, unknown> }) => {
+            criado = args.data;
+            return Promise.resolve({ id: 'p1', ...args.data });
+          }),
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'p1',
+            stage: 'NEW',
+            touchCount: 0,
+            channel: 'INSTAGRAM',
+            list: { cadenceDays: [2, 4, 7] },
+          }),
+          update: jest.fn().mockImplementation((a: unknown) => a),
+        },
+        prospectTouch: {
+          create: jest.fn().mockImplementation((a: unknown) => {
+            toqueRegistrado = a;
+            return a;
+          }),
+        },
+        prospectApproach: { findFirst: jest.fn().mockResolvedValue({ id: 'ap-1' }) },
+        $transaction: jest.fn().mockImplementation((ops: unknown[]) => Promise.resolve(ops)),
+      };
+      const svc = new ProspectsService(prisma as never, {} as never, {} as never);
+      return { svc, dados: () => criado, toque: () => toqueRegistrado };
+    }
+
+    it('a observacao do cadastro vira a primeira entrada do diario', async () => {
+      // Antes nao havia onde escrever no cadastro, e o que foi avaliado
+      // na hora se perdia ate alguem abrir a ficha.
+      const { svc, dados } = build();
+      await svc.create('org', 'user-1', {
+        name: 'Rafael',
+        observacao: 'Fatura ~80k. Nao anuncia.',
+      });
+
+      const notes = dados().notes as { create: Record<string, unknown> };
+      expect(notes.create).toMatchObject({
+        userId: 'user-1',
+        stage: 'NEW',
+        content: 'Fatura ~80k. Nao anuncia.',
+      });
+    });
+
+    it('sem observacao nao cria entrada vazia no diario', async () => {
+      const { svc, dados } = build();
+      await svc.create('org', 'user-1', { name: 'Rafael', observacao: '   ' });
+      expect(dados().notes).toBeUndefined();
+    });
+
+    it('"ja abordei" registra o primeiro toque junto do cadastro', async () => {
+      // Sem isto era preciso salvar, reabrir a ficha e so entao marcar
+      // a abordagem — dois passos para o que e um so.
+      const { svc, toque } = build();
+      await svc.create('org', 'user-1', {
+        name: 'Rafael',
+        jaAbordado: true,
+        primeiroToqueResultado: 'REPLIED_POSITIVE',
+      });
+
+      expect(toque()).toMatchObject({
+        data: expect.objectContaining({ sequence: 1, outcome: 'REPLIED_POSITIVE' }),
+      });
+    });
+
+    it('sem "ja abordei" nenhum toque e registrado', async () => {
+      const { svc, toque } = build();
+      await svc.create('org', 'user-1', { name: 'Rafael' });
+      expect(toque()).toBeNull();
+    });
+
+    it('quem cadastra vira o dono, para o lembrete ter destinatario', async () => {
+      // O scheduler so avisa quem tem ownerId. Sem este padrao, o
+      // prospect nasceria sem dono e o sino nunca tocaria por ele.
+      const { svc, dados } = build();
+      await svc.create('org', 'user-1', { name: 'Rafael' });
+      expect(dados().ownerId).toBe('user-1');
+    });
+  });
+
+  // ─── Fila do dia e fuso ──────────────────────────────────
+
+  describe('getQueue', () => {
+    // O bug que motivou isto: cadastrar com a data de hoje marcava o
+    // prospect como ATRASADO no ato. A causa estava no front (data lida
+    // como meia-noite UTC), mas o servidor tinha o mesmo vicio pelo
+    // outro lado: ele decidia o que e "hoje" pelo relogio DELE, que em
+    // producao roda em UTC.
+    function build() {
+      const chamadas: Record<string, unknown>[] = [];
+      const prisma = {
+        prospect: {
+          findMany: jest.fn().mockImplementation((args: Record<string, unknown>) => {
+            chamadas.push(args.where as Record<string, unknown>);
+            return Promise.resolve([]);
+          }),
+        },
+      };
+      const svc = new ProspectsService(prisma as never, {} as never, {} as never);
+      return { svc, chamadas };
+    }
+
+    it('usa o fuso de quem olha para decidir o comeco do dia', async () => {
+      // 180 = UTC-3 (getTimezoneOffset devolve invertido).
+      const { svc, chamadas } = build();
+      await svc.getQueue('org', undefined, 180);
+
+      const hoje = chamadas.find((w) => {
+        const na = w.nextActionAt as { gte?: Date };
+        return na?.gte instanceof Date;
+      });
+      const inicio = (hoje!.nextActionAt as { gte: Date }).gte;
+
+      // Meia-noite em UTC-3 e 03:00 UTC.
+      expect(inicio.getUTCHours()).toBe(3);
+    });
+
+    it('em UTC o comeco do dia e meia-noite UTC', async () => {
+      const { svc, chamadas } = build();
+      await svc.getQueue('org', undefined, 0);
+
+      const hoje = chamadas.find((w) => {
+        const na = w.nextActionAt as { gte?: Date };
+        return na?.gte instanceof Date;
+      });
+      const inicio = (hoje!.nextActionAt as { gte: Date }).gte;
+
+      expect(inicio.getUTCHours()).toBe(0);
+    });
+
+    it('um compromisso para hoje as 14h nao cai no balde de atrasados', async () => {
+      // Reproduz o relato: cadastro com data de hoje nascia atrasado.
+      const { svc, chamadas } = build();
+      const offset = 180;
+      await svc.getQueue('org', undefined, offset);
+
+      const atrasados = chamadas.find((w) => {
+        const na = w.nextActionAt as { lt?: Date };
+        return na?.lt instanceof Date;
+      });
+      const corte = (atrasados!.nextActionAt as { lt: Date }).lt;
+
+      // Hoje as 14h em UTC-3, montado como o front monta agora.
+      const agoraLocal = new Date(Date.now() - offset * 60 * 1000);
+      const hojeAs14 = new Date(
+        Date.UTC(
+          agoraLocal.getUTCFullYear(),
+          agoraLocal.getUTCMonth(),
+          agoraLocal.getUTCDate(),
+          14,
+        ) + offset * 60 * 1000,
+      );
+
+      expect(hojeAs14.getTime()).toBeGreaterThanOrEqual(corte.getTime());
+    });
+  });
+
   // ─── Cadência ────────────────────────────────────────────
 
   describe('registerTouch', () => {
