@@ -70,6 +70,29 @@ enterrar é ato separado.
 `@@unique([prospect_id, sequence])` impede toque duplicado na mesma posição se
 duas requisições chegarem juntas.
 
+### Identificação: nenhum campo é obrigatório sozinho
+
+O nome **não** é obrigatório. Em prospecção fria muitas vezes só se tem o
+@ do perfil, ou o telefone de uma indicação — exigir o nome levava a
+inventar um ("Contato 1") só para conseguir salvar.
+
+No lugar disso vale a regra de **pelo menos um identificador**: `name`,
+`business`, `handle`, `phone` ou `email`. Ela não cabe em `NOT NULL` de
+coluna porque é uma condição *entre* colunas, então mora no serviço
+(`create`), e o formulário a repete para avisar antes de o operador
+perder o que digitou.
+
+O rótulo é uma cascata, igual no backend (`rotuloDoProspect`) e no front
+(`displayName`):
+
+```
+negócio → pessoa → @perfil → telefone → e-mail → "Sem identificação"
+```
+
+Os dois precisam concordar: o mesmo rótulo aparece no card, na
+notificação do sino e no título do lead convertido. Sem ele a
+notificação sairia como "Retornar para&nbsp;&nbsp;às 14h".
+
 ### O diário de bordo
 
 Cada anotação guarda **a etapa em que o prospect estava no momento da
@@ -183,6 +206,7 @@ reconhecidos com acento e caixa.
 | Coluna da planilha | Vira |
 |---|---|
 | `Link do Instagram` | `profileUrl` + `handle` normalizado |
+| *(sem coluna de nome)* | fica vazio — o handle não é copiado para lá |
 | `Tem Anuncio?` | `hasAds` |
 | `Data da mensagem` | toque `sequence=1` + `firstContactedAt` |
 | `Principal abordagem` | `ProspectApproach` (criada se não existir) |
@@ -270,7 +294,9 @@ B1/2/3  28   1..3      nunca
 
 Precisa da API no ar. Exercita as quatro melhorias (observação no
 cadastro, "já abordei", compromisso com hora na agenda, diário por etapa)
-e o bug do cadastro nascendo atrasado. **19 asserções.**
+e o bug do cadastro nascendo atrasado. Também cobre o nome opcional:
+cadastrar só com o @, só com telefone, só com o negócio, e a recusa
+quando nada identifica. **28 asserções.**
 
 ### Interface — `cd web && npm run ui:verificar`
 
@@ -286,5 +312,6 @@ rótulo, não o valor cru) e salva PNGs em `web/shots/`.
 
 Opera pelo formulário num navegador de verdade: liga o "já abordei",
 escreve no diário, e confere que o cadastro **não** nasce atrasado —
-coisa que só dá para ver com o relógio local. **26 asserções**, com
-capturas.
+coisa que só dá para ver com o relógio local. Cadastra também um prospect
+**sem nome nenhum** e confere que o card mostra o @ em vez de ficar em
+branco. **33 asserções**, com capturas.
